@@ -2,11 +2,25 @@
 
 This is a web application for teachers to manage virtual money for their students.
 
-## Prerequisites
+## Quick Start for Windows
+
+For an easy setup on Windows, simply double-click the `start.bat` file in the root of the project.
+
+This script will automatically:
+1. Install all dependencies for the backend and frontend.
+2. Start both the backend and frontend servers in new command prompt windows.
+
+After running the script, a browser window should open with the application.
+
+## Manual Setup
+
+If you are not on Windows or prefer to run the application manually, follow the steps below.
+
+### Prerequisites
 
 - Node.js and npm (or yarn)
 
-## Backend Setup
+### Backend Setup
 
 1.  Navigate to the `backend` directory:
     ```bash
@@ -22,7 +36,7 @@ This is a web application for teachers to manage virtual money for their student
     ```
     The server will be running on `http://localhost:3000`. The database files will be created automatically in the `backend/data` directory.
 
-## Frontend Setup
+### Frontend Setup
 
 1.  In a new terminal, navigate to the `frontend` directory:
     ```bash
@@ -38,7 +52,7 @@ This is a web application for teachers to manage virtual money for their student
     ```
     The application will open in your browser at `http://localhost:3001` (or the next available port).
 
-## Creating a Teacher Account
+### Creating a Teacher Account
 
 Teacher accounts can only be created via a command-line script.
 
@@ -47,7 +61,7 @@ Teacher accounts can only be created via a command-line script.
     node createTeacher.js <username> <password>
     ```
 
-## Usage
+### Usage
 
 1.  Once both servers are running, open the application in your browser.
 2.  Log in with the teacher account you created.
