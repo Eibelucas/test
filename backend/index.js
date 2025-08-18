@@ -13,6 +13,38 @@ app.use(bodyParser.json());
 const usersDB = new Datastore({ filename: path.join(__dirname, 'data/users.db'), autoload: true });
 const accountsDB = new Datastore({ filename: path.join(__dirname, 'data/accounts.db'), autoload: true });
 
+// --- Database Seeding ---
+const seedAdminUser = async () => {
+  try {
+    // Using a callback with findOne to ensure we wait for the DB to be loaded.
+    usersDB.findOne({ username: 'Admin' }, async (err, adminUser) => {
+      if (err) {
+        console.error('Error finding admin user:', err);
+        return;
+      }
+      if (!adminUser) {
+        console.log('Admin user not found, creating one...');
+        const admin = {
+          username: 'Admin',
+          password: 'Lucaluc0',
+          role: 'teacher',
+          status: 'active'
+        };
+        await usersDB.insertAsync(admin);
+        console.log('Admin user created successfully.');
+      } else {
+        console.log('Admin user already exists.');
+      }
+    });
+  } catch (error) {
+    console.error('Error seeding admin user:', error);
+  }
+};
+
+// Seed the database when the server starts
+seedAdminUser();
+
+
 // --- API Routes ---
 
 // User Registration

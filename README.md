@@ -52,9 +52,17 @@ If you are not on Windows or prefer to run the application manually, follow the 
     ```
     The application will open in your browser at `http://localhost:3001` (or the next available port).
 
-### Creating a Teacher Account
+### Default Admin Account
 
-Teacher accounts can only be created via a command-line script.
+The first time you start the backend server, a default teacher account will be created automatically with the following credentials:
+- **Username:** `Admin`
+- **Password:** `Lucaluc0`
+
+You can use this account to log in and start using the application.
+
+### Creating Additional Teacher Accounts
+
+If you need to create more teacher accounts, you can use the command-line script.
 
 1.  From the `backend` directory, run the following command, replacing `<username>` and `<password>` with your desired credentials:
     ```bash
@@ -64,5 +72,5 @@ Teacher accounts can only be created via a command-line script.
 ### Usage
 
 1.  Once both servers are running, open the application in your browser.
-2.  Log in with the teacher account you created.
-3.  Students can register for an account, but they will need to be approved by the teacher on the teacher's dashboard before they can log in.
+2.  Log in with the default `Admin` account or another teacher account you created.
+3.  Students can register for an account, but they will need to be approved by a teacher on the teacher's dashboard before they can log in.
