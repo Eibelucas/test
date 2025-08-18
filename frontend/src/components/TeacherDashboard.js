@@ -24,29 +24,45 @@ const TeacherDashboard = () => {
 
     const handleDeposit = async () => {
         if (!selectedStudent || amount <= 0) return;
-        await axios.post(`/api/students/${selectedStudent._id}/deposit`, { amount });
-        alert('Deposit successful');
-        // In a real app, you would update the student's balance in the UI
+        try {
+            await axios.post(`/api/students/${selectedStudent._id}/deposit`, { amount });
+            alert('Deposit successful');
+            // Here you might want to refresh the student's balance
+        } catch (error) {
+            alert(`Error: ${error.response?.data?.message || 'Could not process deposit.'}`);
+        }
     };
 
     const handleWithdraw = async () => {
         if (!selectedStudent || amount <= 0) return;
-        await axios.post(`/api/students/${selectedStudent._id}/withdraw`, { amount });
-        alert('Withdrawal successful');
-        // In a real app, you would update the student's balance in the UI
+        try {
+            await axios.post(`/api/students/${selectedStudent._id}/withdraw`, { amount });
+            alert('Withdrawal successful');
+            // Here you might want to refresh the student's balance
+        } catch (error) {
+            alert(`Error: ${error.response?.data?.message || 'Could not process withdrawal.'}`);
+        }
     };
 
     const handleApprove = async (studentId) => {
-        await axios.post(`/api/admin/approve-student/${studentId}`);
-        alert('Student approved');
-        fetchPendingStudents();
-        fetchStudents(); // refresh the list of active students
+        try {
+            await axios.post(`/api/admin/approve-student/${studentId}`);
+            alert('Student approved');
+            fetchPendingStudents();
+            fetchStudents(); // refresh the list of active students
+        } catch (error) {
+            alert(`Error: ${error.response?.data?.message || 'Could not approve student.'}`);
+        }
     };
 
     const handleReject = async (studentId) => {
-        await axios.post(`/api/admin/reject-student/${studentId}`);
-        alert('Student rejected');
-        fetchPendingStudents();
+        try {
+            await axios.post(`/api/admin/reject-student/${studentId}`);
+            alert('Student rejected');
+            fetchPendingStudents();
+        } catch (error) {
+            alert(`Error: ${error.response?.data?.message || 'Could not reject student.'}`);
+        }
     };
 
     return (

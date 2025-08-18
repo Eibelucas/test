@@ -145,12 +145,12 @@ app.post('/api/students/:id/deposit', async (req, res) => {
 app.post('/api/students/:id/withdraw', async (req, res) => {
   const { amount } = req.body;
   const account = await accountsDB.findOneAsync({ userId: req.params.id });
-  if (account && account.balance >= amount) {
+  if (account) {
     await accountsDB.updateAsync({ userId: req.params.id }, { $inc: { balance: -amount } });
     const updatedAccount = await accountsDB.findOneAsync({ userId: req.params.id });
     res.json({ message: 'Withdrawal successful', balance: updatedAccount.balance });
   } else {
-    res.status(400).json({ message: 'Insufficient funds or account not found.' });
+    res.status(404).json({ message: 'Account not found.' });
   }
 });
 

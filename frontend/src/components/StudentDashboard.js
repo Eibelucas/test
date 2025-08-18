@@ -12,10 +12,27 @@ const StudentDashboard = ({ user }) => {
         fetchBalance();
     }, [user]);
 
+    const debtWarningStyles = {
+        backgroundColor: '#ffdddd',
+        border: '1px solid #f44336',
+        color: '#f44336',
+        padding: '15px',
+        margin: '20px 0',
+        borderRadius: '5px'
+    };
+
     return (
         <div>
             <h2>Student Dashboard</h2>
             <h3>Welcome, {user.username}</h3>
+
+            {balance < 0 && (
+                <div style={debtWarningStyles}>
+                    <h3>INSUFFICIENT FUNDS</h3>
+                    <p>Your account is overdrawn. Please give money to your teacher to add to your balance.</p>
+                </div>
+            )}
+
             <h4>Your balance is: ${balance}</h4>
         </div>
     );
