@@ -5,7 +5,6 @@ This is a web application for teachers to manage virtual money for their student
 ## Prerequisites
 
 - Node.js and npm (or yarn)
-- A running MongoDB instance
 
 ## Backend Setup
 
@@ -17,12 +16,11 @@ This is a web application for teachers to manage virtual money for their student
     ```bash
     npm install
     ```
-3.  Make sure your MongoDB server is running. The application will try to connect to `mongodb://localhost:27017/classroom-money`. You can change this URI in `backend/index.js`.
-4.  Start the backend server:
+3.  Start the backend server:
     ```bash
     node index.js
     ```
-    The server will be running on `http://localhost:3000`.
+    The server will be running on `http://localhost:3000`. The database files will be created automatically in the `backend/data` directory.
 
 ## Frontend Setup
 

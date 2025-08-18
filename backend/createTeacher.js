@@ -1,10 +1,8 @@
 // backend/createTeacher.js
-const mongoose = require('mongoose');
-const User = require('./models/User');
+const Datastore = require('@seald-io/nedb');
+const path = require('path');
 
-// It's not ideal to have the connection string here and in index.js
-// but for now this is fine for a simple script.
-const mongoURI = 'mongodb://localhost:27017/classroom-money';
+const usersDB = new Datastore({ filename: path.join(__dirname, 'data/users.db'), autoload: true });
 
 const createTeacher = async (username, password) => {
   if (!username || !password) {
@@ -12,22 +10,23 @@ const createTeacher = async (username, password) => {
     process.exit(1);
   }
 
-  await mongoose.connect(mongoURI);
-
   try {
-    const teacher = new User({
+    const existingUser = await usersDB.findOneAsync({ username });
+    if (existingUser) {
+      console.log('Error: Username already exists.');
+      return;
+    }
+
+    const teacher = {
       username,
       password, // In a real app, hash this!
       role: 'teacher',
       status: 'active'
-    });
-    await teacher.save();
+    };
+    await usersDB.insertAsync(teacher);
     console.log(`Teacher ${username} created successfully.`);
   } catch (error) {
     console.error('Error creating teacher:', error.message);
-  } finally {
-    await mongoose.disconnect();
-    console.log('Disconnected from database.');
   }
 };
 
