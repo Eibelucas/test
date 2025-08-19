@@ -33,6 +33,7 @@ const TeacherDashboard = ({ user }) => {
     const [openNewPollDialog, setOpenNewPollDialog] = useState(false);
     const [newPollTitle, setNewPollTitle] = useState('');
     const [newPollDateTime, setNewPollDateTime] = useState(dayjs());
+    const [openDemoDataDialog, setOpenDemoDataDialog] = useState(false);
 
 
     // --- Data Fetching ---
@@ -162,6 +163,21 @@ const TeacherDashboard = ({ user }) => {
         }
     };
 
+    const handleLoadDemoData = async () => {
+        setOpenDemoDataDialog(false);
+        try {
+            await axios.post('/api/admin/load-demo-data');
+            alert('Demo data loaded successfully!');
+            // Refresh all data on the dashboard
+            fetchStudents();
+            fetchPendingStudents();
+            fetchGroups();
+            fetchPolls();
+        } catch (error) {
+            alert(`Error: ${error.response?.data?.message || 'Could not load demo data.'}`);
+        }
+    };
+
 
     // New states for recipes
     const [recipes, setRecipes] = useState([]); // For groups
@@ -256,6 +272,22 @@ const TeacherDashboard = ({ user }) => {
                 Teacher Dashboard
             </Typography>
             <Grid container spacing={4}>
+
+                {/* Admin Actions Section */}
+                <Grid item xs={12}>
+                    <Card>
+                        <CardHeader title="Admin Actions" />
+                        <CardContent>
+                            <Button
+                                variant="contained"
+                                color="warning"
+                                onClick={() => setOpenDemoDataDialog(true)}
+                            >
+                                Load Demo Data
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </Grid>
 
                 {/* Poll Management Section */}
                 <Grid item xs={12}>
@@ -630,6 +662,25 @@ const TeacherDashboard = ({ user }) => {
                         </DialogActions>
                     </>
                 )}
+            </Dialog>
+
+            {/* Load Demo Data Confirmation Dialog */}
+            <Dialog
+                open={openDemoDataDialog}
+                onClose={() => setOpenDemoDataDialog(false)}
+            >
+                <DialogTitle>{"Load Demo Data?"}</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Are you sure you want to load demo data? This will delete all existing student and group data. This action cannot be undone.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenDemoDataDialog(false)}>Cancel</Button>
+                    <Button onClick={handleLoadDemoData} color="warning" autoFocus>
+                        Load Data
+                    </Button>
+                </DialogActions>
             </Dialog>
         </Box>
     );
