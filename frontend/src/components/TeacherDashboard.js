@@ -12,6 +12,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import AddIcon from '@mui/icons-material/Add';
 import dayjs from 'dayjs';
+import EventCalendar from './EventCalendar';
 
 const TeacherDashboard = ({ user }) => {
     // Existing states
@@ -38,6 +39,15 @@ const TeacherDashboard = ({ user }) => {
 
 
     const [transactions, setTransactions] = useState([]);
+
+    // States for Event Calendar
+    const [events, setEvents] = useState([]);
+    const [openEventDialog, setOpenEventDialog] = useState(false);
+    const [selectedEvent, setSelectedEvent] = useState(null);
+    const [newEventTitle, setNewEventTitle] = useState('');
+    const [newEventDescription, setNewEventDescription] = useState('');
+    const [newEventStart, setNewEventStart] = useState(null);
+    const [newEventEnd, setNewEventEnd] = useState(null);
 
 
     // --- Data Fetching ---
@@ -77,11 +87,27 @@ const TeacherDashboard = ({ user }) => {
         }
     };
 
+    const fetchEvents = async () => {
+        try {
+            const { data } = await axios.get('/api/events');
+            // Convert date strings back to Date objects
+            const formattedEvents = data.map(event => ({
+                ...event,
+                start: new Date(event.start),
+                end: new Date(event.end),
+            }));
+            setEvents(formattedEvents);
+        } catch (error) {
+            console.error("Failed to fetch events", error);
+        }
+    };
+
     useEffect(() => {
         fetchStudents();
         fetchPendingStudents();
         fetchGroups();
         fetchPolls();
+        fetchEvents();
     }, []);
 
     const fetchTransactions = async (studentId) => {
@@ -205,6 +231,62 @@ const TeacherDashboard = ({ user }) => {
         }
     };
 
+    // --- Event Calendar Handlers ---
+    const handleSelectEvent = (event) => {
+        setSelectedEvent(event);
+        setNewEventTitle(event.title);
+        setNewEventDescription(event.description || '');
+        setNewEventStart(dayjs(event.start));
+        setNewEventEnd(dayjs(event.end));
+        setOpenEventDialog(true);
+    };
+
+    const handleSelectSlot = ({ start, end }) => {
+        setSelectedEvent(null);
+        setNewEventTitle('');
+        setNewEventDescription('');
+        setNewEventStart(dayjs(start));
+        setNewEventEnd(dayjs(end));
+        setOpenEventDialog(true);
+    };
+
+    const handleSaveEvent = async () => {
+        if (!newEventTitle || !newEventStart || !newEventEnd) return;
+
+        const eventData = {
+            title: newEventTitle,
+            description: newEventDescription,
+            start: newEventStart.toISOString(),
+            end: newEventEnd.toISOString(),
+            createdBy: user._id,
+        };
+
+        try {
+            if (selectedEvent) {
+                // Update existing event
+                await axios.put(`/api/events/${selectedEvent._id}`, eventData);
+            } else {
+                // Create new event
+                await axios.post('/api/events', eventData);
+            }
+            fetchEvents(); // Refresh events
+            setOpenEventDialog(false);
+        } catch (error) {
+            alert(`Error: ${error.response?.data?.message || 'Could not save event.'}`);
+        }
+    };
+
+    const handleDeleteEvent = async () => {
+        if (!selectedEvent) return;
+        try {
+            await axios.delete(`/api/events/${selectedEvent._id}`);
+            fetchEvents(); // Refresh events
+            setOpenEventDialog(false);
+        } catch (error) {
+            alert(`Error: ${error.response?.data?.message || 'Could not delete event.'}`);
+        }
+    };
+
 
     // New states for recipes
     const [recipes, setRecipes] = useState([]); // For groups
@@ -299,6 +381,21 @@ const TeacherDashboard = ({ user }) => {
                 Teacher Dashboard
             </Typography>
             <Grid container spacing={4}>
+
+                {/* Event Calendar Section */}
+                <Grid item xs={12}>
+                    <Card>
+                        <CardHeader title="Event Calendar" />
+                        <CardContent>
+                            <EventCalendar
+                                events={events}
+                                onSelectEvent={handleSelectEvent}
+                                onSelectSlot={handleSelectSlot}
+                                isTeacher={true}
+                            />
+                        </CardContent>
+                    </Card>
+                </Grid>
 
                 {/* Admin Actions Section */}
                 <Grid item xs={12}>
@@ -748,6 +845,59 @@ const TeacherDashboard = ({ user }) => {
                     <Button onClick={() => setOpenDemoDataDialog(false)}>Cancel</Button>
                     <Button onClick={handleLoadDemoData} color="warning" autoFocus>
                         Load Data
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Event Dialog */}
+            <Dialog open={openEventDialog} onClose={() => setOpenEventDialog(false)} fullWidth maxWidth="sm">
+                <DialogTitle>{selectedEvent ? 'Edit Event' : 'Create Event'}</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        label="Event Title"
+                        type="text"
+                        fullWidth
+                        variant="standard"
+                        value={newEventTitle}
+                        onChange={(e) => setNewEventTitle(e.target.value)}
+                        sx={{ mb: 2 }}
+                    />
+                    <TextField
+                        margin="dense"
+                        label="Description"
+                        type="text"
+                        fullWidth
+                        multiline
+                        rows={3}
+                        variant="standard"
+                        value={newEventDescription}
+                        onChange={(e) => setNewEventDescription(e.target.value)}
+                        sx={{ mb: 2 }}
+                    />
+                    <DateTimePicker
+                        label="Start Time"
+                        value={newEventStart}
+                        onChange={(newValue) => setNewEventStart(newValue)}
+                        renderInput={(params) => <TextField {...params} fullWidth sx={{ mb: 2 }} />}
+                    />
+                    <DateTimePicker
+                        label="End Time"
+                        value={newEventEnd}
+                        onChange={(newValue) => setNewEventEnd(newValue)}
+                        renderInput={(params) => <TextField {...params} fullWidth />}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenEventDialog(false)}>Cancel</Button>
+                    {selectedEvent && (
+                        <Button onClick={handleDeleteEvent} color="error">
+                            Delete
+                        </Button>
+                    )}
+                    <Button onClick={handleSaveEvent} variant="contained">
+                        {selectedEvent ? 'Save Changes' : 'Create'}
                     </Button>
                 </DialogActions>
             </Dialog>

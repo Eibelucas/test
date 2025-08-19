@@ -17,6 +17,7 @@ const recipesDB = new Datastore({ filename: path.join(__dirname, 'data/recipes.d
 const votesDB = new Datastore({ filename: path.join(__dirname, 'data/votes.db'), autoload: true });
 const pollsDB = new Datastore({ filename: path.join(__dirname, 'data/polls.db'), autoload: true });
 const transactionsDB = new Datastore({ filename: path.join(__dirname, 'data/transactions.db'), autoload: true });
+const eventsDB = new Datastore({ filename: path.join(__dirname, 'data/events.db'), autoload: true });
 
 // --- Database Seeding ---
 const seedAdminUser = async () => {
@@ -486,6 +487,46 @@ app.get('/api/students/:studentId/votes', async (req, res) => {
     // We only need to return the recipeIds the student has voted for
     const recipeIds = votes.map(vote => vote.recipeId);
     res.json(recipeIds);
+});
+
+
+// --- Event Management Routes ---
+
+// Get all events
+app.get('/api/events', async (req, res) => {
+    const events = await eventsDB.findAsync({});
+    res.json(events);
+});
+
+// Create a new event
+app.post('/api/events', async (req, res) => {
+    const { title, start, end, description, createdBy } = req.body;
+    if (!title || !start || !end || !createdBy) {
+        return res.status(400).json({ message: 'Title, start time, end time, and creator are required.' });
+    }
+    const newEvent = {
+        title,
+        start,
+        end,
+        description,
+        createdBy,
+        createdAt: new Date()
+    };
+    const createdEvent = await eventsDB.insertAsync(newEvent);
+    res.status(201).json(createdEvent);
+});
+
+// Update an event
+app.put('/api/events/:id', async (req, res) => {
+    const { title, start, end, description } = req.body;
+    await eventsDB.updateAsync({ _id: req.params.id }, { $set: { title, start, end, description } });
+    res.json({ message: 'Event updated successfully.' });
+});
+
+// Delete an event
+app.delete('/api/events/:id', async (req, res) => {
+    await eventsDB.removeAsync({ _id: req.params.id });
+    res.json({ message: 'Event deleted successfully.' });
 });
 
 
