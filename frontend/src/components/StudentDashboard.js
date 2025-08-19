@@ -1,39 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { Card, CardContent, Typography, Alert } from '@mui/material';
 
 const StudentDashboard = ({ user }) => {
     const [balance, setBalance] = useState(0);
 
     useEffect(() => {
         const fetchBalance = async () => {
-            const { data } = await axios.get(`/api/students/${user._id}/balance`);
-            setBalance(data.balance);
+            try {
+                const { data } = await axios.get(`/api/students/${user._id}/balance`);
+                setBalance(data.balance);
+            } catch (error) {
+                console.error("Failed to fetch balance", error);
+            }
         };
         fetchBalance();
     }, [user]);
 
-    const debtWarningStyles = {
-        backgroundColor: '#ffdddd',
-        border: '1px solid #f44336',
-        color: '#f44336',
-        padding: '15px',
-        margin: '20px 0',
-        borderRadius: '5px'
-    };
-
     return (
         <div>
-            <h2>Student Dashboard</h2>
-            <h3>Welcome, {user.username}</h3>
+            <Typography variant="h4" gutterBottom>
+                Student Dashboard
+            </Typography>
+            <Typography variant="h6">
+                Welcome, {user.username}
+            </Typography>
 
             {balance < 0 && (
-                <div style={debtWarningStyles}>
-                    <h3>INSUFFICIENT FUNDS</h3>
-                    <p>Your account is overdrawn. Please give money to your teacher to add to your balance.</p>
-                </div>
+                <Alert severity="error" sx={{ mt: 2 }}>
+                    INSUFFICIENT FUNDS: Your account is overdrawn. Please give money to your teacher to add to your balance.
+                </Alert>
             )}
 
-            <h4>Your balance is: ${balance}</h4>
+            <Card sx={{ minWidth: 275, mt: 2 }}>
+                <CardContent>
+                    <Typography sx={{ fontSize: 14 }} color="text.secondary" gutterBottom>
+                        Current Balance
+                    </Typography>
+                    <Typography variant="h5" component="div" sx={{ color: balance < 0 ? 'red' : 'green' }}>
+                        ${balance}
+                    </Typography>
+                </CardContent>
+            </Card>
         </div>
     );
 };

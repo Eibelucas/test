@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import {
+    Typography, Grid, Card, CardHeader, CardContent, List, ListItem, ListItemText,
+    Button, Box, TextField, Divider, IconButton
+} from '@mui/material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
 
 const TeacherDashboard = () => {
     const [students, setStudents] = useState([]);
@@ -8,13 +14,21 @@ const TeacherDashboard = () => {
     const [amount, setAmount] = useState(0);
 
     const fetchStudents = async () => {
-        const { data } = await axios.get('/api/students');
-        setStudents(data);
+        try {
+            const { data } = await axios.get('/api/students');
+            setStudents(data);
+        } catch (error) {
+            console.error("Failed to fetch students", error);
+        }
     };
 
     const fetchPendingStudents = async () => {
-        const { data } = await axios.get('/api/admin/pending-students');
-        setPendingStudents(data);
+        try {
+            const { data } = await axios.get('/api/admin/pending-students');
+            setPendingStudents(data);
+        } catch (error) {
+            console.error("Failed to fetch pending students", error);
+        }
     };
 
     useEffect(() => {
@@ -22,85 +36,112 @@ const TeacherDashboard = () => {
         fetchPendingStudents();
     }, []);
 
-    const handleDeposit = async () => {
+    const handleTransaction = async (type) => {
         if (!selectedStudent || amount <= 0) return;
         try {
-            await axios.post(`/api/students/${selectedStudent._id}/deposit`, { amount });
-            alert('Deposit successful');
-            // Here you might want to refresh the student's balance
+            await axios.post(`/api/students/${selectedStudent._id}/${type}`, { amount });
+            alert(`${type.charAt(0).toUpperCase() + type.slice(1)} successful`);
+            // You might want to refresh the student's balance here,
+            // but that would require fetching all accounts or the specific one.
+            // For now, we'll leave it as is.
+            setAmount(0);
         } catch (error) {
-            alert(`Error: ${error.response?.data?.message || 'Could not process deposit.'}`);
+            alert(`Error: ${error.response?.data?.message || `Could not process ${type}.`}`);
         }
     };
 
-    const handleWithdraw = async () => {
-        if (!selectedStudent || amount <= 0) return;
+    const handleApproval = async (studentId, action) => {
         try {
-            await axios.post(`/api/students/${selectedStudent._id}/withdraw`, { amount });
-            alert('Withdrawal successful');
-            // Here you might want to refresh the student's balance
-        } catch (error) {
-            alert(`Error: ${error.response?.data?.message || 'Could not process withdrawal.'}`);
-        }
-    };
-
-    const handleApprove = async (studentId) => {
-        try {
-            await axios.post(`/api/admin/approve-student/${studentId}`);
-            alert('Student approved');
+            await axios.post(`/api/admin/${action}-student/${studentId}`);
+            alert(`Student ${action}d`);
             fetchPendingStudents();
-            fetchStudents(); // refresh the list of active students
+            if (action === 'approve') {
+                fetchStudents();
+            }
         } catch (error) {
-            alert(`Error: ${error.response?.data?.message || 'Could not approve student.'}`);
-        }
-    };
-
-    const handleReject = async (studentId) => {
-        try {
-            await axios.post(`/api/admin/reject-student/${studentId}`);
-            alert('Student rejected');
-            fetchPendingStudents();
-        } catch (error) {
-            alert(`Error: ${error.response?.data?.message || 'Could not reject student.'}`);
+            alert(`Error: ${error.response?.data?.message || `Could not ${action} student.`}`);
         }
     };
 
     return (
-        <div>
-            <h2>Teacher Dashboard</h2>
+        <Box sx={{ flexGrow: 1 }}>
+            <Typography variant="h4" gutterBottom>
+                Teacher Dashboard
+            </Typography>
+            <Grid container spacing={4}>
+                {/* Pending Approvals Section */}
+                <Grid item xs={12} md={6}>
+                    <Card>
+                        <CardHeader title="Pending Approvals" />
+                        <CardContent>
+                            <List>
+                                {pendingStudents.length > 0 ? pendingStudents.map(student => (
+                                    <ListItem
+                                        key={student._id}
+                                        secondaryAction={
+                                            <>
+                                                <IconButton edge="end" aria-label="approve" onClick={() => handleApproval(student._id, 'approve')}>
+                                                    <CheckCircleIcon color="success" />
+                                                </IconButton>
+                                                <IconButton edge="end" aria-label="reject" onClick={() => handleApproval(student._id, 'reject')}>
+                                                    <CancelIcon color="error" />
+                                                </IconButton>
+                                            </>
+                                        }
+                                    >
+                                        <ListItemText primary={student.username} />
+                                    </ListItem>
+                                )) : <Typography>No pending approvals.</Typography>}
+                            </List>
+                        </CardContent>
+                    </Card>
+                </Grid>
 
-            <div>
-                <h3>Pending Approvals</h3>
-                <ul>
-                    {pendingStudents.map(student => (
-                        <li key={student._id}>
-                            {student.username}
-                            <button onClick={() => handleApprove(student._id)}>Approve</button>
-                            <button onClick={() => handleReject(student._id)}>Reject</button>
-                        </li>
-                    ))}
-                </ul>
-            </div>
-
-            <div>
-                <h3>Active Students</h3>
-                <ul>
-                    {students.map(student => (
-                        <li key={student._id} onClick={() => setSelectedStudent(student)}>
-                            {student.username}
-                        </li>
-                    ))}
-                </ul>
-                {selectedStudent && (
-                    <div>
-                        <h3>Manage Balance for {selectedStudent.username}</h3>
-                        <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} />
-                        <button onClick={handleDeposit}>Deposit</button>
-                        <button onClick={handleWithdraw}>Withdraw</button>
-                    </div>
-                )}
-            </div>
-        </div>
+                {/* Active Students & Transactions Section */}
+                <Grid item xs={12} md={6}>
+                    <Card>
+                        <CardHeader title="Active Students" />
+                        <CardContent>
+                            <List component="nav" aria-label="main mailbox folders">
+                                {students.map(student => (
+                                    <ListItem
+                                        button
+                                        key={student._id}
+                                        selected={selectedStudent?._id === student._id}
+                                        onClick={() => setSelectedStudent(student)}
+                                    >
+                                        <ListItemText primary={student.username} />
+                                    </ListItem>
+                                ))}
+                            </List>
+                            {selectedStudent && (
+                                <Box sx={{ p: 2, borderTop: '1px solid #ddd' }}>
+                                    <Typography variant="h6">
+                                        Manage Balance for {selectedStudent.username}
+                                    </Typography>
+                                    <TextField
+                                        label="Amount"
+                                        type="number"
+                                        value={amount}
+                                        onChange={e => setAmount(Number(e.target.value))}
+                                        fullWidth
+                                        margin="normal"
+                                    />
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-around', mt: 2 }}>
+                                        <Button variant="contained" color="success" onClick={() => handleTransaction('deposit')}>
+                                            Deposit
+                                        </Button>
+                                        <Button variant="contained" color="warning" onClick={() => handleTransaction('withdraw')}>
+                                            Withdraw
+                                        </Button>
+                                    </Box>
+                                </Box>
+                            )}
+                        </CardContent>
+                    </Card>
+                </Grid>
+            </Grid>
+        </Box>
     );
 };
 
