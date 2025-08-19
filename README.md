@@ -50,7 +50,7 @@ If you are not on Windows or prefer to run the application manually, follow the 
     ```bash
     npm start
     ```
-    The application will open in your browser at `http://localhost:3001` (or the next available port).
+    The application will open in your browser at `http://localhost:3001`.
 
 ### Default Admin Account
 
