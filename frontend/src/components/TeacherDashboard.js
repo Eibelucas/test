@@ -4,7 +4,8 @@ import {
     Typography, Grid, Card, CardHeader, CardContent, List, ListItem, ListItemText,
     Button, Box, TextField, Divider, IconButton,
     Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
-    Select, MenuItem, FormControl, InputLabel, OutlinedInput, Chip
+    Select, MenuItem, FormControl, InputLabel, OutlinedInput, Chip,
+    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -34,6 +35,9 @@ const TeacherDashboard = ({ user }) => {
     const [newPollTitle, setNewPollTitle] = useState('');
     const [newPollDateTime, setNewPollDateTime] = useState(dayjs());
     const [openDemoDataDialog, setOpenDemoDataDialog] = useState(false);
+
+
+    const [transactions, setTransactions] = useState([]);
 
 
     // --- Data Fetching ---
@@ -80,6 +84,28 @@ const TeacherDashboard = ({ user }) => {
         fetchPolls();
     }, []);
 
+    const fetchTransactions = async (studentId) => {
+        if (!studentId) {
+            setTransactions([]);
+            return;
+        }
+        try {
+            const { data } = await axios.get(`/api/students/${studentId}/transactions`);
+            setTransactions(data);
+        } catch (error) {
+            console.error("Failed to fetch transactions", error);
+            setTransactions([]); // Clear on error
+        }
+    };
+
+    useEffect(() => {
+        if (selectedStudent) {
+            fetchTransactions(selectedStudent._id);
+        } else {
+            setTransactions([]);
+        }
+    }, [selectedStudent]);
+
     useEffect(() => {
         if (selectedGroup) {
             setSelectedGroupStudentIds(selectedGroup.studentIds || []);
@@ -94,6 +120,7 @@ const TeacherDashboard = ({ user }) => {
             await axios.post(`/api/students/${selectedStudent._id}/${type}`, { amount });
             alert(`${type.charAt(0).toUpperCase() + type.slice(1)} successful`);
             setAmount(0);
+            fetchTransactions(selectedStudent._id); // Refresh transactions
         } catch (error) {
             alert(`Error: ${error.response?.data?.message || `Could not process ${type}.`}`);
         }
@@ -538,6 +565,48 @@ const TeacherDashboard = ({ user }) => {
                                             Withdraw
                                         </Button>
                                     </Box>
+                                    <Divider sx={{ my: 2 }} />
+                                    <Typography variant="h6">Transaction History</Typography>
+                                    <TableContainer component={Paper} sx={{ maxHeight: 300 }}>
+                                        <Table stickyHeader size="small" aria-label="transaction history">
+                                            <TableHead>
+                                                <TableRow>
+                                                    <TableCell>Date</TableCell>
+                                                    <TableCell>Type</TableCell>
+                                                    <TableCell align="right">Amount</TableCell>
+                                                    <TableCell>Details</TableCell>
+                                                </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                                {transactions.length > 0 ? transactions.map((tx) => (
+                                                    <TableRow key={tx._id}>
+                                                        <TableCell component="th" scope="row">
+                                                            {dayjs(tx.timestamp).format('YYYY-MM-DD HH:mm')}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Chip
+                                                                label={tx.type}
+                                                                size="small"
+                                                                color={
+                                                                    tx.type === 'deposit' ? 'success' :
+                                                                    tx.type === 'withdrawal' ? 'warning' :
+                                                                    'error'
+                                                                }
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell align="right">${tx.amount}</TableCell>
+                                                        <TableCell>{tx.groupName ? `For: ${tx.groupName}` : 'N/A'}</TableCell>
+                                                    </TableRow>
+                                                )) : (
+                                                    <TableRow>
+                                                        <TableCell colSpan={4} align="center">
+                                                            No transactions found.
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    </TableContainer>
                                 </Box>
                             )}
                         </CardContent>

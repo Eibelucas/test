@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Card, CardContent, Typography, Alert, List, ListItem, ListItemText, Divider, Button, Box, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
+import {
+    Card, CardContent, Typography, Alert, List, ListItem, ListItemText, Divider, Button, Box, Accordion, AccordionSummary, AccordionDetails,
+    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip
+} from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import dayjs from 'dayjs';
 
@@ -9,20 +12,23 @@ const StudentDashboard = ({ user }) => {
     const [groups, setGroups] = useState([]);
     const [polls, setPolls] = useState([]);
     const [votedRecipeIds, setVotedRecipeIds] = useState([]);
+    const [transactions, setTransactions] = useState([]);
 
     const fetchData = async () => {
         try {
             // Fetch initial data
-            const [balanceRes, groupsRes, votesRes, pollsRes] = await Promise.all([
+            const [balanceRes, groupsRes, votesRes, pollsRes, transactionsRes] = await Promise.all([
                 axios.get(`/api/students/${user._id}/balance`),
                 axios.get(`/api/students/${user._id}/groups`),
                 axios.get(`/api/students/${user._id}/votes`),
-                axios.get('/api/polls') // Get all polls
+                axios.get('/api/polls'), // Get all polls
+                axios.get(`/api/students/${user._id}/transactions`)
             ]);
 
             setBalance(balanceRes.data.balance);
             setGroups(groupsRes.data);
             setVotedRecipeIds(votesRes.data);
+            setTransactions(transactionsRes.data);
 
             // For each poll, fetch its recipes
             const pollsWithRecipes = await Promise.all(
@@ -78,6 +84,52 @@ const StudentDashboard = ({ user }) => {
                     </Typography>
                 </CardContent>
             </Card>
+
+            <Divider sx={{ my: 2 }} />
+
+            <Typography variant="h5" gutterBottom>
+                Transaction History
+            </Typography>
+            <TableContainer component={Paper} sx={{ mb: 2 }}>
+                <Table size="small" aria-label="transaction history">
+                    <TableHead>
+                        <TableRow>
+                            <TableCell>Date</TableCell>
+                            <TableCell>Type</TableCell>
+                            <TableCell align="right">Amount</TableCell>
+                            <TableCell>Details</TableCell>
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {transactions.length > 0 ? transactions.map((tx) => (
+                            <TableRow key={tx._id}>
+                                <TableCell component="th" scope="row">
+                                    {dayjs(tx.timestamp).format('YYYY-MM-DD HH:mm')}
+                                </TableCell>
+                                <TableCell>
+                                    <Chip
+                                        label={tx.type}
+                                        size="small"
+                                        color={
+                                            tx.type === 'deposit' ? 'success' :
+                                            tx.type === 'withdrawal' ? 'warning' :
+                                            'error'
+                                        }
+                                    />
+                                </TableCell>
+                                <TableCell align="right">${tx.amount}</TableCell>
+                                <TableCell>{tx.groupName ? `From: ${tx.groupName}` : 'N/A'}</TableCell>
+                            </TableRow>
+                        )) : (
+                            <TableRow>
+                                <TableCell colSpan={4} align="center">
+                                    No transactions found.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </TableContainer>
 
             <Divider sx={{ my: 2 }} />
 
