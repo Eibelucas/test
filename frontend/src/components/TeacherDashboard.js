@@ -23,6 +23,7 @@ const TeacherDashboard = () => {
     const [newGroupName, setNewGroupName] = useState('');
     const [openNewGroupDialog, setOpenNewGroupDialog] = useState(false);
     const [selectedGroupStudentIds, setSelectedGroupStudentIds] = useState([]);
+    const [groupChargeAmount, setGroupChargeAmount] = useState(0);
 
 
     // --- Data Fetching ---
@@ -114,6 +115,80 @@ const TeacherDashboard = () => {
         }
     };
 
+    const handleGroupCharge = async () => {
+        if (!selectedGroup || groupChargeAmount <= 0) return;
+        try {
+            await axios.post(`/api/groups/${selectedGroup._id}/charge`, { amount: groupChargeAmount });
+            alert(`Successfully charged the group $${groupChargeAmount}.`);
+            setGroupChargeAmount(0);
+        } catch (error) {
+            alert(`Error: ${error.response?.data?.message || 'Could not process group charge.'}`);
+        }
+    };
+
+
+    // New states for recipes
+    const [recipes, setRecipes] = useState([]);
+    const [openNewRecipeDialog, setOpenNewRecipeDialog] = useState(false);
+    const [newRecipe, setNewRecipe] = useState({ name: '', ingredients: '', instructions: '' });
+    const [viewRecipe, setViewRecipe] = useState(null); // The recipe to view
+
+    // --- Data Fetching ---
+    const fetchStudents = async () => { /* ... */ };
+    const fetchPendingStudents = async () => { /* ... */ };
+    const fetchGroups = async () => { /* ... */ };
+    const fetchRecipes = async (groupId) => {
+        if (!groupId) {
+            setRecipes([]);
+            return;
+        }
+        try {
+            const { data } = await axios.get(`/api/groups/${groupId}/recipes`);
+            setRecipes(data);
+        } catch (error) {
+            console.error("Failed to fetch recipes", error);
+        }
+    };
+
+    useEffect(() => {
+        fetchStudents();
+        fetchPendingStudents();
+        fetchGroups();
+    }, []);
+
+    useEffect(() => {
+        if (selectedGroup) {
+            setSelectedGroupStudentIds(selectedGroup.studentIds || []);
+            fetchRecipes(selectedGroup._id);
+        } else {
+            fetchRecipes(null);
+        }
+    }, [selectedGroup]);
+
+
+    // --- Handlers ---
+    const handleTransaction = async (type) => { /* ... */ };
+    const handleApproval = async (studentId, action) => { /* ... */ };
+    const handleCreateGroup = async () => { /* ... */ };
+    const handleUpdateGroupStudents = async () => { /* ... */ };
+    const handleGroupCharge = async () => { /* ... */ };
+
+    const handleCreateRecipe = async () => {
+        if (!selectedGroup || !newRecipe.name || !newRecipe.ingredients) return;
+        try {
+            const ingredientsArray = newRecipe.ingredients.split(',').map(item => item.trim());
+            await axios.post(`/api/groups/${selectedGroup._id}/recipes`, {
+                ...newRecipe,
+                ingredients: ingredientsArray,
+            });
+            setOpenNewRecipeDialog(false);
+            setNewRecipe({ name: '', ingredients: '', instructions: '' });
+            fetchRecipes(selectedGroup._id);
+        } catch (error) {
+            alert(`Error: ${error.response?.data?.message || 'Could not create recipe.'}`);
+        }
+    };
+
 
     // --- Render ---
     return (
@@ -183,6 +258,48 @@ const TeacherDashboard = () => {
                                                 </Select>
                                             </FormControl>
                                             <Button sx={{mt: 2}} variant="contained" onClick={handleUpdateGroupStudents}>Save Members</Button>
+
+                                            <Divider sx={{ my: 2 }} />
+                                            <Typography variant="subtitle1">Charge All Members</Typography>
+                                            <TextField
+                                                label="Amount to Charge"
+                                                type="number"
+                                                value={groupChargeAmount}
+                                                onChange={e => setGroupChargeAmount(Number(e.target.value))}
+                                                fullWidth
+                                                margin="normal"
+                                                size="small"
+                                            />
+                                            <Button variant="contained" color="error" onClick={handleGroupCharge}>
+                                                Charge Group
+                                            </Button>
+
+                                            <Divider sx={{ my: 2 }} />
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <Typography variant="subtitle1">Recipes</Typography>
+                                                <Button
+                                                    variant="outlined"
+                                                    size="small"
+                                                    startIcon={<AddIcon />}
+                                                    onClick={() => setOpenNewRecipeDialog(true)}
+                                                >
+                                                    New Recipe
+                                                </Button>
+                                            </Box>
+                                            <List>
+                                                {recipes.map(recipe => (
+                                                    <ListItem
+                                                        key={recipe._id}
+                                                        secondaryAction={
+                                                            <Button size="small" onClick={() => setViewRecipe(recipe)}>
+                                                                View
+                                                            </Button>
+                                                        }
+                                                    >
+                                                        <ListItemText primary={recipe.name} secondary={`Votes: ${recipe.voteCount}`} />
+                                                    </ListItem>
+                                                ))}
+                                            </List>
                                         </Box>
                                     )}
                                 </Grid>
@@ -287,6 +404,72 @@ const TeacherDashboard = () => {
                     <Button onClick={() => setOpenNewGroupDialog(false)}>Cancel</Button>
                     <Button onClick={handleCreateGroup}>Create</Button>
                 </DialogActions>
+            </Dialog>
+
+            {/* New Recipe Dialog */}
+            <Dialog open={openNewRecipeDialog} onClose={() => setOpenNewRecipeDialog(false)} fullWidth maxWidth="sm">
+                <DialogTitle>Create New Recipe</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        label="Recipe Name"
+                        type="text"
+                        fullWidth
+                        variant="standard"
+                        value={newRecipe.name}
+                        onChange={(e) => setNewRecipe({ ...newRecipe, name: e.target.value })}
+                    />
+                    <TextField
+                        margin="dense"
+                        label="Ingredients (comma-separated)"
+                        type="text"
+                        fullWidth
+                        variant="standard"
+                        value={newRecipe.ingredients}
+                        onChange={(e) => setNewRecipe({ ...newRecipe, ingredients: e.target.value })}
+                    />
+                    <TextField
+                        margin="dense"
+                        label="Instructions"
+                        type="text"
+                        fullWidth
+                        multiline
+                        rows={4}
+                        variant="standard"
+                        value={newRecipe.instructions}
+                        onChange={(e) => setNewRecipe({ ...newRecipe, instructions: e.target.value })}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenNewRecipeDialog(false)}>Cancel</Button>
+                    <Button onClick={handleCreateRecipe}>Create</Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* View Recipe Dialog */}
+            <Dialog open={!!viewRecipe} onClose={() => setViewRecipe(null)} fullWidth maxWidth="sm">
+                {viewRecipe && (
+                    <>
+                        <DialogTitle>{viewRecipe.name}</DialogTitle>
+                        <DialogContent>
+                            <DialogContentText component="div">
+                                <Typography variant="h6">Instructions</Typography>
+                                <Typography style={{ whiteSpace: 'pre-wrap' }}>{viewRecipe.instructions}</Typography>
+                                <Divider sx={{ my: 2 }} />
+                                <Typography variant="h6">Shopping List</Typography>
+                                <ul>
+                                    {viewRecipe.ingredients.map((item, index) => (
+                                        <li key={index}>{item}</li>
+                                    ))}
+                                </ul>
+                            </DialogContentText>
+                        </DialogContent>
+                        <DialogActions>
+                            <Button onClick={() => setViewRecipe(null)}>Close</Button>
+                        </DialogActions>
+                    </>
+                )}
             </Dialog>
         </Box>
     );

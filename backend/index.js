@@ -13,6 +13,8 @@ app.use(bodyParser.json());
 const usersDB = new Datastore({ filename: path.join(__dirname, 'data/users.db'), autoload: true });
 const accountsDB = new Datastore({ filename: path.join(__dirname, 'data/accounts.db'), autoload: true });
 const groupsDB = new Datastore({ filename: path.join(__dirname, 'data/groups.db'), autoload: true });
+const recipesDB = new Datastore({ filename: path.join(__dirname, 'data/recipes.db'), autoload: true });
+const votesDB = new Datastore({ filename: path.join(__dirname, 'data/votes.db'), autoload: true });
 
 // --- Database Seeding ---
 const seedAdminUser = async () => {
@@ -155,11 +157,25 @@ app.post('/api/students/:id/withdraw', async (req, res) => {
   }
 });
 
-// Get all groups for a specific student
+// Get all groups for a specific student, with recipes
 app.get('/api/students/:id/groups', async (req, res) => {
     const studentId = req.params.id;
     const groups = await groupsDB.findAsync({ studentIds: studentId });
-    res.json(groups);
+
+    const groupsWithRecipes = await Promise.all(
+        groups.map(async (group) => {
+            const recipes = await recipesDB.findAsync({ groupId: group._id });
+            const recipesWithVotes = await Promise.all(
+                recipes.map(async (recipe) => {
+                    const votes = await votesDB.findAsync({ recipeId: recipe._id });
+                    return { ...recipe, voteCount: votes.length };
+                })
+            );
+            return { ...group, recipes: recipesWithVotes };
+        })
+    );
+
+    res.json(groupsWithRecipes);
 });
 
 // --- Group Management Routes ---
@@ -200,6 +216,109 @@ app.put('/api/groups/:id/students', async (req, res) => {
   const { studentIds } = req.body;
   await groupsDB.updateAsync({ _id: req.params.id }, { $set: { studentIds } });
   res.json({ message: 'Group updated successfully.' });
+});
+
+// Charge all students in a group
+app.post('/api/groups/:id/charge', async (req, res) => {
+    const { amount } = req.body;
+    if (!amount || amount <= 0) {
+        return res.status(400).json({ message: 'A positive amount is required.' });
+    }
+
+    const group = await groupsDB.findOneAsync({ _id: req.params.id });
+    if (!group) {
+        return res.status(404).json({ message: 'Group not found.' });
+    }
+
+    await accountsDB.updateAsync(
+        { userId: { $in: group.studentIds } },
+        { $inc: { balance: -amount } },
+        { multi: true }
+    );
+
+    res.json({ message: `Successfully charged $${amount} to all students in ${group.name}.` });
+});
+
+
+// --- Recipe Management Routes ---
+
+// Create a new recipe for a group
+app.post('/api/groups/:groupId/recipes', async (req, res) => {
+    const { name, ingredients, instructions } = req.body;
+    const { groupId } = req.params;
+
+    if (!name || !ingredients || !instructions) {
+        return res.status(400).json({ message: 'Name, ingredients, and instructions are required.' });
+    }
+
+    const newRecipe = {
+        name,
+        ingredients, // Should be an array of strings
+        instructions,
+        groupId
+    };
+
+    const createdRecipe = await recipesDB.insertAsync(newRecipe);
+    res.status(201).json(createdRecipe);
+});
+
+// Get all recipes for a group, with vote counts
+app.get('/api/groups/:groupId/recipes', async (req, res) => {
+    const { groupId } = req.params;
+    const recipes = await recipesDB.findAsync({ groupId });
+
+    // For each recipe, get its vote count
+    const recipesWithVotes = await Promise.all(
+        recipes.map(async (recipe) => {
+            const votes = await votesDB.findAsync({ recipeId: recipe._id });
+            return { ...recipe, voteCount: votes.length };
+        })
+    );
+
+    res.json(recipesWithVotes);
+});
+
+
+// --- Voting Routes ---
+
+// Cast a vote for a recipe
+app.post('/api/recipes/:recipeId/vote', async (req, res) => {
+    const { studentId } = req.body;
+    const { recipeId } = req.params;
+
+    if (!studentId) {
+        return res.status(400).json({ message: 'Student ID is required.' });
+    }
+
+    // Check for duplicate vote
+    const existingVote = await votesDB.findOneAsync({ recipeId, studentId });
+    if (existingVote) {
+        return res.status(400).json({ message: 'You have already voted for this recipe.' });
+    }
+
+    const newVote = {
+        recipeId,
+        studentId
+    };
+
+    const createdVote = await votesDB.insertAsync(newVote);
+    res.status(201).json(createdVote);
+});
+
+// Get all votes for a recipe (to get the count)
+app.get('/api/recipes/:recipeId/votes', async (req, res) => {
+    const { recipeId } = req.params;
+    const votes = await votesDB.findAsync({ recipeId });
+    res.json({ count: votes.length });
+});
+
+// Get all votes by a student
+app.get('/api/students/:studentId/votes', async (req, res) => {
+    const { studentId } = req.params;
+    const votes = await votesDB.findAsync({ studentId });
+    // We only need to return the recipeIds the student has voted for
+    const recipeIds = votes.map(vote => vote.recipeId);
+    res.json(recipeIds);
 });
 
 
