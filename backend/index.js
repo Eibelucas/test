@@ -16,6 +16,7 @@ const groupsDB = new Datastore({ filename: path.join(__dirname, 'data/groups.db'
 const recipesDB = new Datastore({ filename: path.join(__dirname, 'data/recipes.db'), autoload: true });
 const votesDB = new Datastore({ filename: path.join(__dirname, 'data/votes.db'), autoload: true });
 const pollsDB = new Datastore({ filename: path.join(__dirname, 'data/polls.db'), autoload: true });
+const transactionsDB = new Datastore({ filename: path.join(__dirname, 'data/transactions.db'), autoload: true });
 
 // --- Database Seeding ---
 const seedAdminUser = async () => {
@@ -190,23 +191,55 @@ app.get('/api/students/:id/balance', async (req, res) => {
 
 // Deposit money
 app.post('/api/students/:id/deposit', async (req, res) => {
-  const { amount } = req.body;
-  await accountsDB.updateAsync({ userId: req.params.id }, { $inc: { balance: amount } });
-  const updatedAccount = await accountsDB.findOneAsync({ userId: req.params.id });
-  res.json({ message: 'Deposit successful', balance: updatedAccount.balance });
+    const { amount } = req.body;
+    const studentId = req.params.id;
+
+    if (!amount || amount <= 0) {
+        return res.status(400).json({ message: 'A positive amount is required.' });
+    }
+
+    await accountsDB.updateAsync({ userId: studentId }, { $inc: { balance: amount } });
+
+    // Create a transaction record
+    const transaction = {
+        studentId,
+        type: 'deposit',
+        amount,
+        timestamp: new Date()
+    };
+    await transactionsDB.insertAsync(transaction);
+
+    const updatedAccount = await accountsDB.findOneAsync({ userId: studentId });
+    res.json({ message: 'Deposit successful', balance: updatedAccount.balance });
 });
 
 // Withdraw money
 app.post('/api/students/:id/withdraw', async (req, res) => {
-  const { amount } = req.body;
-  const account = await accountsDB.findOneAsync({ userId: req.params.id });
-  if (account) {
-    await accountsDB.updateAsync({ userId: req.params.id }, { $inc: { balance: -amount } });
-    const updatedAccount = await accountsDB.findOneAsync({ userId: req.params.id });
-    res.json({ message: 'Withdrawal successful', balance: updatedAccount.balance });
-  } else {
-    res.status(404).json({ message: 'Account not found.' });
-  }
+    const { amount } = req.body;
+    const studentId = req.params.id;
+
+    if (!amount || amount <= 0) {
+        return res.status(400).json({ message: 'A positive amount is required.' });
+    }
+
+    const account = await accountsDB.findOneAsync({ userId: studentId });
+    if (account) {
+        await accountsDB.updateAsync({ userId: studentId }, { $inc: { balance: -amount } });
+
+        // Create a transaction record
+        const transaction = {
+            studentId,
+            type: 'withdrawal',
+            amount,
+            timestamp: new Date()
+        };
+        await transactionsDB.insertAsync(transaction);
+
+        const updatedAccount = await accountsDB.findOneAsync({ userId: studentId });
+        res.json({ message: 'Withdrawal successful', balance: updatedAccount.balance });
+    } else {
+        res.status(404).json({ message: 'Account not found.' });
+    }
 });
 
 // Get all groups for a specific student, with recipes
@@ -228,6 +261,14 @@ app.get('/api/students/:id/groups', async (req, res) => {
     );
 
     res.json(groupsWithRecipes);
+});
+
+// Get all transactions for a specific student
+app.get('/api/students/:id/transactions', async (req, res) => {
+    const studentId = req.params.id;
+    // Sort by timestamp descending to show the most recent first
+    const transactions = await transactionsDB.findAsync({ studentId }).sort({ timestamp: -1 });
+    res.json(transactions);
 });
 
 
@@ -344,11 +385,23 @@ app.post('/api/groups/:id/charge', async (req, res) => {
         return res.status(404).json({ message: 'Group not found.' });
     }
 
+    // Update balances
     await accountsDB.updateAsync(
         { userId: { $in: group.studentIds } },
         { $inc: { balance: -amount } },
         { multi: true }
     );
+
+    // Create a transaction record for each student
+    const transactions = group.studentIds.map(studentId => ({
+        studentId,
+        type: 'charge',
+        amount,
+        groupName: group.name,
+        groupId: group._id,
+        timestamp: new Date()
+    }));
+    await transactionsDB.insertAsync(transactions);
 
     res.json({ message: `Successfully charged $${amount} to all students in ${group.name}.` });
 });
