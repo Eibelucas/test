@@ -6,6 +6,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import dayjs from 'dayjs';
+import EventCalendar from './EventCalendar';
 
 const StudentDashboard = ({ user }) => {
     const [balance, setBalance] = useState(0);
@@ -13,22 +14,30 @@ const StudentDashboard = ({ user }) => {
     const [polls, setPolls] = useState([]);
     const [votedRecipeIds, setVotedRecipeIds] = useState([]);
     const [transactions, setTransactions] = useState([]);
+    const [events, setEvents] = useState([]);
 
     const fetchData = async () => {
         try {
             // Fetch initial data
-            const [balanceRes, groupsRes, votesRes, pollsRes, transactionsRes] = await Promise.all([
+            const [balanceRes, groupsRes, votesRes, pollsRes, transactionsRes, eventsRes] = await Promise.all([
                 axios.get(`/api/students/${user._id}/balance`),
                 axios.get(`/api/students/${user._id}/groups`),
                 axios.get(`/api/students/${user._id}/votes`),
                 axios.get('/api/polls'), // Get all polls
-                axios.get(`/api/students/${user._id}/transactions`)
+                axios.get(`/api/students/${user._id}/transactions`),
+                axios.get('/api/events')
             ]);
 
             setBalance(balanceRes.data.balance);
             setGroups(groupsRes.data);
             setVotedRecipeIds(votesRes.data);
             setTransactions(transactionsRes.data);
+            const formattedEvents = eventsRes.data.map(event => ({
+                ...event,
+                start: new Date(event.start),
+                end: new Date(event.end),
+            }));
+            setEvents(formattedEvents);
 
             // For each poll, fetch its recipes
             const pollsWithRecipes = await Promise.all(
@@ -82,6 +91,17 @@ const StudentDashboard = ({ user }) => {
                     <Typography variant="h5" component="div" sx={{ color: balance < 0 ? 'red' : 'green' }}>
                         ${balance}
                     </Typography>
+                </CardContent>
+            </Card>
+
+            <Divider sx={{ my: 2 }} />
+
+            <Typography variant="h5" gutterBottom>
+                Upcoming Events
+            </Typography>
+            <Card sx={{ mb: 2 }}>
+                <CardContent>
+                    <EventCalendar events={events} isTeacher={false} />
                 </CardContent>
             </Card>
 
