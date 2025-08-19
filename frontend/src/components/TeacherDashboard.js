@@ -6,11 +6,13 @@ import {
     Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
     Select, MenuItem, FormControl, InputLabel, OutlinedInput, Chip
 } from '@mui/material';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import AddIcon from '@mui/icons-material/Add';
+import dayjs from 'dayjs';
 
-const TeacherDashboard = () => {
+const TeacherDashboard = ({ user }) => {
     // Existing states
     const [students, setStudents] = useState([]);
     const [pendingStudents, setPendingStudents] = useState([]);
@@ -24,6 +26,13 @@ const TeacherDashboard = () => {
     const [openNewGroupDialog, setOpenNewGroupDialog] = useState(false);
     const [selectedGroupStudentIds, setSelectedGroupStudentIds] = useState([]);
     const [groupChargeAmount, setGroupChargeAmount] = useState(0);
+
+    // States for polls
+    const [polls, setPolls] = useState([]);
+    const [selectedPoll, setSelectedPoll] = useState(null);
+    const [openNewPollDialog, setOpenNewPollDialog] = useState(false);
+    const [newPollTitle, setNewPollTitle] = useState('');
+    const [newPollDateTime, setNewPollDateTime] = useState(dayjs());
 
 
     // --- Data Fetching ---
@@ -54,10 +63,20 @@ const TeacherDashboard = () => {
         }
     };
 
+    const fetchPolls = async () => {
+        try {
+            const { data } = await axios.get('/api/polls');
+            setPolls(data);
+        } catch (error) {
+            console.error("Failed to fetch polls", error);
+        }
+    };
+
     useEffect(() => {
         fetchStudents();
         fetchPendingStudents();
         fetchGroups();
+        fetchPolls();
     }, []);
 
     useEffect(() => {
@@ -126,9 +145,27 @@ const TeacherDashboard = () => {
         }
     };
 
+    const handleCreatePoll = async () => {
+        if (!newPollTitle || !newPollDateTime) return;
+        try {
+            await axios.post('/api/polls', {
+                title: newPollTitle,
+                classDateTime: newPollDateTime.toISOString(),
+                createdBy: user._id,
+            });
+            setNewPollTitle('');
+            setNewPollDateTime(dayjs());
+            setOpenNewPollDialog(false);
+            fetchPolls();
+        } catch (error) {
+            alert(`Error: ${error.response?.data?.message || 'Could not create poll.'}`);
+        }
+    };
+
 
     // New states for recipes
-    const [recipes, setRecipes] = useState([]);
+    const [recipes, setRecipes] = useState([]); // For groups
+    const [pollRecipes, setPollRecipes] = useState([]); // For polls
     const [openNewRecipeDialog, setOpenNewRecipeDialog] = useState(false);
     const [newRecipe, setNewRecipe] = useState({ name: '', ingredients: '', instructions: '' });
     const [viewRecipe, setViewRecipe] = useState(null); // The recipe to view
@@ -142,12 +179,26 @@ const TeacherDashboard = () => {
             const { data } = await axios.get(`/api/groups/${groupId}/recipes`);
             setRecipes(data);
         } catch (error) {
-            console.error("Failed to fetch recipes", error);
+            console.error("Failed to fetch group recipes", error);
+        }
+    };
+
+    const fetchPollRecipes = async (pollId) => {
+        if (!pollId) {
+            setPollRecipes([]);
+            return;
+        }
+        try {
+            const { data } = await axios.get(`/api/polls/${pollId}/recipes`);
+            setPollRecipes(data);
+        } catch (error) {
+            console.error("Failed to fetch poll recipes", error);
         }
     };
 
     useEffect(() => {
         if (selectedGroup) {
+            setSelectedPoll(null); // Deselect poll when group is selected
             setSelectedGroupStudentIds(selectedGroup.studentIds || []);
             fetchRecipes(selectedGroup._id);
         } else {
@@ -155,19 +206,43 @@ const TeacherDashboard = () => {
         }
     }, [selectedGroup]);
 
+    useEffect(() => {
+        if (selectedPoll) {
+            setSelectedGroup(null); // Deselect group when poll is selected
+            fetchPollRecipes(selectedPoll._id);
+        } else {
+            fetchPollRecipes(null);
+        }
+    }, [selectedPoll]);
 
 
     const handleCreateRecipe = async () => {
-        if (!selectedGroup || !newRecipe.name || !newRecipe.ingredients) return;
+        const { name, ingredients } = newRecipe;
+        if (!name || !ingredients) return;
+
+        const ingredientsArray = ingredients.split(',').map(item => item.trim());
+        const recipeData = { ...newRecipe, ingredients: ingredientsArray };
+
+        let url = '';
+        if (selectedPoll) {
+            url = `/api/polls/${selectedPoll._id}/recipes`;
+        } else if (selectedGroup) {
+            url = `/api/groups/${selectedGroup._id}/recipes`;
+        } else {
+            alert("Please select a group or a poll first.");
+            return;
+        }
+
         try {
-            const ingredientsArray = newRecipe.ingredients.split(',').map(item => item.trim());
-            await axios.post(`/api/groups/${selectedGroup._id}/recipes`, {
-                ...newRecipe,
-                ingredients: ingredientsArray,
-            });
+            await axios.post(url, recipeData);
             setOpenNewRecipeDialog(false);
             setNewRecipe({ name: '', ingredients: '', instructions: '' });
-            fetchRecipes(selectedGroup._id);
+            // Refetch recipes for the current context
+            if (selectedPoll) {
+                fetchPollRecipes(selectedPoll._id);
+            } else if (selectedGroup) {
+                fetchRecipes(selectedGroup._id);
+            }
         } catch (error) {
             alert(`Error: ${error.response?.data?.message || 'Could not create recipe.'}`);
         }
@@ -181,6 +256,78 @@ const TeacherDashboard = () => {
                 Teacher Dashboard
             </Typography>
             <Grid container spacing={4}>
+
+                {/* Poll Management Section */}
+                <Grid item xs={12}>
+                    <Card>
+                        <CardHeader
+                            title="Cooking Class Polls"
+                            action={
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<AddIcon />}
+                                    onClick={() => setOpenNewPollDialog(true)}
+                                >
+                                    New Poll
+                                </Button>
+                            }
+                        />
+                        <CardContent>
+                            <Grid container spacing={2}>
+                                <Grid item xs={4}>
+                                    <Typography variant="h6">Polls</Typography>
+                                    <List component="nav">
+                                        {polls.map(poll => (
+                                            <ListItem
+                                                button
+                                                key={poll._id}
+                                                selected={selectedPoll?._id === poll._id}
+                                                onClick={() => setSelectedPoll(poll)}
+                                            >
+                                                <ListItemText
+                                                    primary={poll.title}
+                                                    secondary={`Class on: ${dayjs(poll.classDateTime).format('MMMM D, YYYY h:mm A')}`}
+                                                />
+                                            </ListItem>
+                                        ))}
+                                    </List>
+                                </Grid>
+                                <Grid item xs={8}>
+                                    {selectedPoll && (
+                                        <Box>
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <Typography variant="h6">Recipes for {selectedPoll.title}</Typography>
+                                                <Button
+                                                    variant="outlined"
+                                                    size="small"
+                                                    startIcon={<AddIcon />}
+                                                    onClick={() => setOpenNewRecipeDialog(true)}
+                                                >
+                                                    New Recipe
+                                                </Button>
+                                            </Box>
+                                            <List>
+                                                {pollRecipes.map(recipe => (
+                                                    <ListItem
+                                                        key={recipe._id}
+                                                        secondaryAction={
+                                                            <Button size="small" onClick={() => setViewRecipe(recipe)}>
+                                                                View
+                                                            </Button>
+                                                        }
+                                                    >
+                                                        <ListItemText primary={recipe.name} secondary={`Votes: ${recipe.voteCount}`} />
+                                                    </ListItem>
+                                                ))}
+                                            </List>
+                                        </Box>
+                                    )}
+                                </Grid>
+                            </Grid>
+                        </CardContent>
+                    </Card>
+                </Grid>
+
                 {/* Group Management Section */}
                 <Grid item xs={12}>
                     <Card>
@@ -266,6 +413,7 @@ const TeacherDashboard = () => {
                                                     size="small"
                                                     startIcon={<AddIcon />}
                                                     onClick={() => setOpenNewRecipeDialog(true)}
+                                                    disabled={!selectedGroup} // Disable if no group is selected
                                                 >
                                                     New Recipe
                                                 </Button>
@@ -364,6 +512,34 @@ const TeacherDashboard = () => {
                     </Card>
                 </Grid>
             </Grid>
+
+            {/* New Poll Dialog */}
+            <Dialog open={openNewPollDialog} onClose={() => setOpenNewPollDialog(false)}>
+                <DialogTitle>Create New Cooking Class Poll</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        label="Poll Title"
+                        type="text"
+                        fullWidth
+                        variant="standard"
+                        value={newPollTitle}
+                        onChange={(e) => setNewPollTitle(e.target.value)}
+                        sx={{ mb: 2 }}
+                    />
+                    <DateTimePicker
+                        label="Class Date & Time"
+                        value={newPollDateTime}
+                        onChange={(newValue) => setNewPollDateTime(newValue)}
+                        renderInput={(params) => <TextField {...params} fullWidth />}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenNewPollDialog(false)}>Cancel</Button>
+                    <Button onClick={handleCreatePoll}>Create</Button>
+                </DialogActions>
+            </Dialog>
 
             {/* New Group Dialog */}
             <Dialog open={openNewGroupDialog} onClose={() => setOpenNewGroupDialog(false)}>

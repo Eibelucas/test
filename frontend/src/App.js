@@ -2,6 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import LoginPage from './components/LoginPage';
 import RegistrationPage from './components/RegistrationPage';
 import TeacherDashboard from './components/TeacherDashboard';
@@ -38,16 +40,17 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Router>
-        <Layout colorMode={colorMode}>
-          <Routes>
-            <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" />} />
+      <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <Router>
+          <Layout colorMode={colorMode}>
+            <Routes>
+              <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" />} />
             <Route path="/register" element={!user ? <RegistrationPage /> : <Navigate to="/" />} />
             <Route path="/" element={
               !user ? (
                 <Navigate to="/login" />
               ) : user.role === 'teacher' ? (
-                <TeacherDashboard />
+                <TeacherDashboard user={user} />
               ) : (
                 <StudentDashboard user={user} />
               )
@@ -55,6 +58,7 @@ function App() {
           </Routes>
         </Layout>
       </Router>
+      </LocalizationProvider>
     </ThemeProvider>
   );
 }
