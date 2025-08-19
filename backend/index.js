@@ -12,6 +12,7 @@ app.use(bodyParser.json());
 // --- Database Setup ---
 const usersDB = new Datastore({ filename: path.join(__dirname, 'data/users.db'), autoload: true });
 const accountsDB = new Datastore({ filename: path.join(__dirname, 'data/accounts.db'), autoload: true });
+const groupsDB = new Datastore({ filename: path.join(__dirname, 'data/groups.db'), autoload: true });
 
 // --- Database Seeding ---
 const seedAdminUser = async () => {
@@ -153,6 +154,54 @@ app.post('/api/students/:id/withdraw', async (req, res) => {
     res.status(404).json({ message: 'Account not found.' });
   }
 });
+
+// Get all groups for a specific student
+app.get('/api/students/:id/groups', async (req, res) => {
+    const studentId = req.params.id;
+    const groups = await groupsDB.findAsync({ studentIds: studentId });
+    res.json(groups);
+});
+
+// --- Group Management Routes ---
+
+// Create a new group
+app.post('/api/groups', async (req, res) => {
+  const { name } = req.body;
+  if (!name) {
+    return res.status(400).json({ message: 'Group name is required.' });
+  }
+  const newGroup = {
+    name,
+    studentIds: []
+  };
+  const createdGroup = await groupsDB.insertAsync(newGroup);
+  res.status(201).json(createdGroup);
+});
+
+// Get all groups
+app.get('/api/groups', async (req, res) => {
+  const groups = await groupsDB.findAsync({});
+  res.json(groups);
+});
+
+// Get a single group with student details
+app.get('/api/groups/:id', async (req, res) => {
+    const group = await groupsDB.findOneAsync({ _id: req.params.id });
+    if (!group) {
+        return res.status(404).json({ message: 'Group not found.' });
+    }
+    const students = await usersDB.findAsync({ _id: { $in: group.studentIds } });
+    res.json({ ...group, students });
+});
+
+
+// Update students in a group
+app.put('/api/groups/:id/students', async (req, res) => {
+  const { studentIds } = req.body;
+  await groupsDB.updateAsync({ _id: req.params.id }, { $set: { studentIds } });
+  res.json({ message: 'Group updated successfully.' });
+});
+
 
 // --- Server ---
 app.listen(port, () => {
