@@ -4,13 +4,15 @@ import {
     Typography, Grid, Card, CardHeader, CardContent, List, ListItem, ListItemText,
     Button, Box, TextField, Divider, IconButton,
     Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
-    Select, MenuItem, FormControl, InputLabel, OutlinedInput, Chip
+    Select, MenuItem, FormControl, InputLabel, OutlinedInput, Chip,
+    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import AddIcon from '@mui/icons-material/Add';
 import dayjs from 'dayjs';
+import EventCalendar from './EventCalendar';
 
 const TeacherDashboard = ({ user }) => {
     // Existing states
@@ -34,6 +36,18 @@ const TeacherDashboard = ({ user }) => {
     const [newPollTitle, setNewPollTitle] = useState('');
     const [newPollDateTime, setNewPollDateTime] = useState(dayjs());
     const [openDemoDataDialog, setOpenDemoDataDialog] = useState(false);
+
+
+    const [transactions, setTransactions] = useState([]);
+
+    // States for Event Calendar
+    const [events, setEvents] = useState([]);
+    const [openEventDialog, setOpenEventDialog] = useState(false);
+    const [selectedEvent, setSelectedEvent] = useState(null);
+    const [newEventTitle, setNewEventTitle] = useState('');
+    const [newEventDescription, setNewEventDescription] = useState('');
+    const [newEventStart, setNewEventStart] = useState(null);
+    const [newEventEnd, setNewEventEnd] = useState(null);
 
     // States for import
     const [openImportDialog, setOpenImportDialog] = useState(false);
@@ -78,12 +92,50 @@ const TeacherDashboard = ({ user }) => {
         }
     };
 
+    const fetchEvents = async () => {
+        try {
+            const { data } = await axios.get('/api/events');
+            // Convert date strings back to Date objects
+            const formattedEvents = data.map(event => ({
+                ...event,
+                start: new Date(event.start),
+                end: new Date(event.end),
+            }));
+            setEvents(formattedEvents);
+        } catch (error) {
+            console.error("Failed to fetch events", error);
+        }
+    };
+
     useEffect(() => {
         fetchStudents();
         fetchPendingStudents();
         fetchGroups();
         fetchPolls();
+        fetchEvents();
     }, []);
+
+    const fetchTransactions = async (studentId) => {
+        if (!studentId) {
+            setTransactions([]);
+            return;
+        }
+        try {
+            const { data } = await axios.get(`/api/students/${studentId}/transactions`);
+            setTransactions(data);
+        } catch (error) {
+            console.error("Failed to fetch transactions", error);
+            setTransactions([]); // Clear on error
+        }
+    };
+
+    useEffect(() => {
+        if (selectedStudent) {
+            fetchTransactions(selectedStudent._id);
+        } else {
+            setTransactions([]);
+        }
+    }, [selectedStudent]);
 
     useEffect(() => {
         if (selectedGroup) {
@@ -99,6 +151,7 @@ const TeacherDashboard = ({ user }) => {
             await axios.post(`/api/students/${selectedStudent._id}/${type}`, { amount });
             alert(`${type.charAt(0).toUpperCase() + type.slice(1)} successful`);
             setAmount(0);
+            fetchTransactions(selectedStudent._id); // Refresh transactions
         } catch (error) {
             alert(`Error: ${error.response?.data?.message || `Could not process ${type}.`}`);
         }
@@ -222,10 +275,67 @@ const TeacherDashboard = ({ user }) => {
             fetchPendingStudents();
             fetchGroups();
             fetchPolls();
+            fetchEvents(); // Also refresh events
         } catch (error) {
             alert(`Error: ${error.response?.data?.message || 'Could not import data.'}`);
         } finally {
             setFileToImport(null);
+        }
+    };
+
+    // --- Event Calendar Handlers ---
+    const handleSelectEvent = (event) => {
+        setSelectedEvent(event);
+        setNewEventTitle(event.title);
+        setNewEventDescription(event.description || '');
+        setNewEventStart(dayjs(event.start));
+        setNewEventEnd(dayjs(event.end));
+        setOpenEventDialog(true);
+    };
+
+    const handleSelectSlot = ({ start, end }) => {
+        setSelectedEvent(null);
+        setNewEventTitle('');
+        setNewEventDescription('');
+        setNewEventStart(dayjs(start));
+        setNewEventEnd(dayjs(end));
+        setOpenEventDialog(true);
+    };
+
+    const handleSaveEvent = async () => {
+        if (!newEventTitle || !newEventStart || !newEventEnd) return;
+
+        const eventData = {
+            title: newEventTitle,
+            description: newEventDescription,
+            start: newEventStart.toISOString(),
+            end: newEventEnd.toISOString(),
+            createdBy: user._id,
+        };
+
+        try {
+            if (selectedEvent) {
+                // Update existing event
+                await axios.put(`/api/events/${selectedEvent._id}`, eventData);
+            } else {
+                // Create new event
+                await axios.post('/api/events', eventData);
+            }
+            fetchEvents(); // Refresh events
+            setOpenEventDialog(false);
+        } catch (error) {
+            alert(`Error: ${error.response?.data?.message || 'Could not save event.'}`);
+        }
+    };
+
+    const handleDeleteEvent = async () => {
+        if (!selectedEvent) return;
+        try {
+            await axios.delete(`/api/events/${selectedEvent._id}`);
+            fetchEvents(); // Refresh events
+            setOpenEventDialog(false);
+        } catch (error) {
+            alert(`Error: ${error.response?.data?.message || 'Could not delete event.'}`);
         }
     };
 
@@ -324,11 +434,26 @@ const TeacherDashboard = ({ user }) => {
             </Typography>
             <Grid container spacing={4}>
 
+                {/* Event Calendar Section */}
+                <Grid item xs={12}>
+                    <Card>
+                        <CardHeader title="Event Calendar" />
+                        <CardContent>
+                            <EventCalendar
+                                events={events}
+                                onSelectEvent={handleSelectEvent}
+                                onSelectSlot={handleSelectSlot}
+                                isTeacher={true}
+                            />
+                        </CardContent>
+                    </Card>
+                </Grid>
+
                 {/* Admin Actions Section */}
                 <Grid item xs={12}>
                     <Card>
                         <CardHeader title="Admin Actions" />
-                        <CardContent sx={{ display: 'flex', gap: 2 }}>
+                        <CardContent sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                             <Button
                                 variant="contained"
                                 color="warning"
@@ -603,6 +728,48 @@ const TeacherDashboard = ({ user }) => {
                                             Withdraw
                                         </Button>
                                     </Box>
+                                    <Divider sx={{ my: 2 }} />
+                                    <Typography variant="h6">Transaction History</Typography>
+                                    <TableContainer component={Paper} sx={{ maxHeight: 300 }}>
+                                        <Table stickyHeader size="small" aria-label="transaction history">
+                                            <TableHead>
+                                                <TableRow>
+                                                    <TableCell>Date</TableCell>
+                                                    <TableCell>Type</TableCell>
+                                                    <TableCell align="right">Amount</TableCell>
+                                                    <TableCell>Details</TableCell>
+                                                </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                                {transactions.length > 0 ? transactions.map((tx) => (
+                                                    <TableRow key={tx._id}>
+                                                        <TableCell component="th" scope="row">
+                                                            {dayjs(tx.timestamp).format('YYYY-MM-DD HH:mm')}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Chip
+                                                                label={tx.type}
+                                                                size="small"
+                                                                color={
+                                                                    tx.type === 'deposit' ? 'success' :
+                                                                    tx.type === 'withdrawal' ? 'warning' :
+                                                                    'error'
+                                                                }
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell align="right">${tx.amount}</TableCell>
+                                                        <TableCell>{tx.groupName ? `For: ${tx.groupName}` : 'N/A'}</TableCell>
+                                                    </TableRow>
+                                                )) : (
+                                                    <TableRow>
+                                                        <TableCell colSpan={4} align="center">
+                                                            No transactions found.
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    </TableContainer>
                                 </Box>
                             )}
                         </CardContent>
@@ -744,6 +911,59 @@ const TeacherDashboard = ({ user }) => {
                     <Button onClick={() => setOpenDemoDataDialog(false)}>Cancel</Button>
                     <Button onClick={handleLoadDemoData} color="warning" autoFocus>
                         Load Data
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Event Dialog */}
+            <Dialog open={openEventDialog} onClose={() => setOpenEventDialog(false)} fullWidth maxWidth="sm">
+                <DialogTitle>{selectedEvent ? 'Edit Event' : 'Create Event'}</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        label="Event Title"
+                        type="text"
+                        fullWidth
+                        variant="standard"
+                        value={newEventTitle}
+                        onChange={(e) => setNewEventTitle(e.target.value)}
+                        sx={{ mb: 2 }}
+                    />
+                    <TextField
+                        margin="dense"
+                        label="Description"
+                        type="text"
+                        fullWidth
+                        multiline
+                        rows={3}
+                        variant="standard"
+                        value={newEventDescription}
+                        onChange={(e) => setNewEventDescription(e.target.value)}
+                        sx={{ mb: 2 }}
+                    />
+                    <DateTimePicker
+                        label="Start Time"
+                        value={newEventStart}
+                        onChange={(newValue) => setNewEventStart(newValue)}
+                        renderInput={(params) => <TextField {...params} fullWidth sx={{ mb: 2 }} />}
+                    />
+                    <DateTimePicker
+                        label="End Time"
+                        value={newEventEnd}
+                        onChange={(newValue) => setNewEventEnd(newValue)}
+                        renderInput={(params) => <TextField {...params} fullWidth />}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenEventDialog(false)}>Cancel</Button>
+                    {selectedEvent && (
+                        <Button onClick={handleDeleteEvent} color="error">
+                            Delete
+                        </Button>
+                    )}
+                    <Button onClick={handleSaveEvent} variant="contained">
+                        {selectedEvent ? 'Save Changes' : 'Create'}
                     </Button>
                 </DialogActions>
             </Dialog>
