@@ -2,6 +2,8 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const Datastore = require('@seald-io/nedb');
 const path = require('path');
+const Excel = require('exceljs');
+const multer = require('multer');
 
 const app = express();
 const port = 3000;
@@ -230,7 +232,6 @@ app.get('/api/students/:id/groups', async (req, res) => {
     res.json(groupsWithRecipes);
 });
 
-
 // --- Poll Management Routes ---
 
 // Create a new poll
@@ -435,6 +436,296 @@ app.get('/api/students/:studentId/votes', async (req, res) => {
     res.json(recipeIds);
 });
 
+
+// --- Import/Export Routes ---
+
+// Configure multer for file uploads
+const upload = multer({ storage: multer.memoryStorage() });
+
+// Export all data to Excel
+app.get('/api/export', async (req, res) => {
+    try {
+        const workbook = new Excel.Workbook();
+        workbook.creator = 'TeacherApp';
+        workbook.created = new Date();
+
+        // --- Fetch Data ---
+        const users = await usersDB.findAsync({});
+        const accounts = await accountsDB.findAsync({});
+        const groups = await groupsDB.findAsync({});
+        const polls = await pollsDB.findAsync({});
+        const recipes = await recipesDB.findAsync({});
+        const votes = await votesDB.findAsync({});
+
+        // Create a map for quick lookups
+        const userMap = new Map(users.map(u => [u._id, u]));
+        const accountMap = new Map(accounts.map(a => [a.userId, a]));
+        const groupMap = new Map(groups.map(g => [g._id, g]));
+        const pollMap = new Map(polls.map(p => [p._id, p]));
+        const recipeMap = new Map(recipes.map(r => [r._id, r]));
+
+
+        // --- Schüler Sheet ---
+        const schuelerSheet = workbook.addWorksheet('Schüler');
+        schuelerSheet.columns = [
+            { header: 'ID', key: '_id', width: 25 },
+            { header: 'Benutzername', key: 'username', width: 20 },
+            { header: 'Rolle', key: 'role', width: 15 },
+            { header: 'Status', key: 'status', width: 15 },
+            { header: 'Kontostand', key: 'balance', width: 15, style: { numFmt: '"€"#,##0.00' } },
+        ];
+        users.filter(u => u.role === 'student').forEach(user => {
+            const account = accountMap.get(user._id);
+            schuelerSheet.addRow({
+                ...user,
+                balance: account ? account.balance : 0
+            });
+        });
+
+        // --- Gruppen Sheet ---
+        const gruppenSheet = workbook.addWorksheet('Gruppen');
+        gruppenSheet.columns = [
+            { header: 'ID', key: '_id', width: 25 },
+            { header: 'Gruppenname', key: 'name', width: 30 },
+            { header: 'Mitglieder (Benutzernamen)', key: 'members', width: 50 },
+        ];
+        groups.forEach(group => {
+            const memberNames = group.studentIds.map(id => userMap.get(id)?.username || 'Unbekannt').join(', ');
+            gruppenSheet.addRow({
+                _id: group._id,
+                name: group.name,
+                members: memberNames
+            });
+        });
+
+        // --- Abstimmungen Sheet ---
+        const abstimmungenSheet = workbook.addWorksheet('Abstimmungen');
+        abstimmungenSheet.columns = [
+            { header: 'ID', key: '_id', width: 25 },
+            { header: 'Titel', key: 'title', width: 40 },
+            { header: 'Datum/Uhrzeit', key: 'classDateTime', width: 25 },
+            { header: 'Status', key: 'status', width: 15 },
+        ];
+        abstimmungenSheet.addRows(polls);
+
+
+        // --- Rezepte Sheet ---
+        const rezepteSheet = workbook.addWorksheet('Rezepte');
+        rezepteSheet.columns = [
+            { header: 'ID', key: '_id', width: 25 },
+            { header: 'Rezeptname', key: 'name', width: 30 },
+            { header: 'Zutaten', key: 'ingredients', width: 50 },
+            { header: 'Anleitung', key: 'instructions', width: 70 },
+            { header: 'Zugehörig zu (Typ)', key: 'contextType', width: 20 },
+            { header: 'Zugehörig zu (Name)', key: 'contextName', width: 30 },
+        ];
+        recipes.forEach(recipe => {
+            let contextType = 'Unbekannt';
+            let contextName = 'N/A';
+            if (recipe.groupId) {
+                contextType = 'Gruppe';
+                contextName = groupMap.get(recipe.groupId)?.name || 'Unbekannte Gruppe';
+            } else if (recipe.pollId) {
+                contextType = 'Abstimmung';
+                contextName = pollMap.get(recipe.pollId)?.title || 'Unbekannte Abstimmung';
+            }
+            rezepteSheet.addRow({
+                _id: recipe._id,
+                name: recipe.name,
+                ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients.join(', ') : recipe.ingredients,
+                instructions: recipe.instructions,
+                contextType: contextType,
+                contextName: contextName,
+            });
+        });
+
+
+        // --- Stimmen Sheet ---
+        const stimmenSheet = workbook.addWorksheet('Stimmen');
+        stimmenSheet.columns = [
+            { header: 'ID', key: '_id', width: 25 },
+            { header: 'Rezeptname', key: 'recipeName', width: 30 },
+            { header: 'Schüler-Benutzername', key: 'studentName', width: 30 },
+        ];
+        votes.forEach(vote => {
+            const recipe = recipeMap.get(vote.recipeId);
+            const student = userMap.get(vote.studentId);
+            if (recipe && student) {
+                stimmenSheet.addRow({
+                    _id: vote._id,
+                    recipeName: recipe.name,
+                    studentName: student.username,
+                });
+            }
+        });
+
+
+        // --- Send File ---
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename="teacher-data-export.xlsx"');
+        await workbook.xlsx.write(res);
+        res.end();
+
+    } catch (error) {
+        console.error('Export failed:', error);
+        res.status(500).json({ message: 'Failed to export data.', error: error.message });
+    }
+});
+
+// Import data from Excel
+app.post('/api/import', upload.single('file'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ message: 'No file uploaded.' });
+    }
+
+    try {
+        // --- Clear Existing Data ---
+        await usersDB.removeAsync({ role: { $ne: 'teacher' } }, { multi: true });
+        await accountsDB.removeAsync({}, { multi: true });
+        await groupsDB.removeAsync({}, { multi: true });
+        await recipesDB.removeAsync({}, { multi: true });
+        await votesDB.removeAsync({}, { multi: true });
+        await pollsDB.removeAsync({}, { multi: true });
+        console.log('Cleared existing data.');
+
+        const workbook = new Excel.Workbook();
+        await workbook.xlsx.load(req.file.buffer);
+
+        // --- Data Maps for Relationship Building ---
+        const usernameToIdMap = new Map();
+        const recipeNameToIdMap = new Map();
+        const groupNameToIdMap = new Map();
+        const pollNameToIdMap = new Map();
+        const adminUser = await usersDB.findOneAsync({ role: 'teacher' });
+
+
+        // --- 1. Import Schüler ---
+        const schuelerSheet = workbook.getWorksheet('Schüler');
+        if (schuelerSheet) {
+            console.log('Importing Schüler...');
+            for (const row of schuelerSheet.getRows(2, schuelerSheet.rowCount - 1)) {
+                const username = row.getCell('B').value;
+                const role = row.getCell('C').value;
+                const status = row.getCell('D').value;
+                const balance = row.getCell('E').value;
+
+                if (username) {
+                    const newUser = await usersDB.insertAsync({
+                        username,
+                        password: 'password', // Default password
+                        role,
+                        status
+                    });
+                    await accountsDB.insertAsync({
+                        userId: newUser._id,
+                        balance: balance || 0
+                    });
+                    usernameToIdMap.set(username, newUser._id);
+                }
+            }
+            console.log(`Imported ${usernameToIdMap.size} students.`);
+        }
+
+
+        // --- 2. Import Gruppen ---
+        const gruppenSheet = workbook.getWorksheet('Gruppen');
+        if (gruppenSheet) {
+            console.log('Importing Gruppen...');
+            for (const row of gruppenSheet.getRows(2, gruppenSheet.rowCount - 1)) {
+                const groupName = row.getCell('B').value;
+                const memberUsernames = row.getCell('C').value.split(',').map(name => name.trim());
+
+                if (groupName) {
+                    const studentIds = memberUsernames.map(name => usernameToIdMap.get(name)).filter(id => id);
+                    const newGroup = await groupsDB.insertAsync({
+                        name: groupName,
+                        studentIds
+                    });
+                    groupNameToIdMap.set(groupName, newGroup._id);
+                }
+            }
+             console.log(`Imported ${groupNameToIdMap.size} groups.`);
+        }
+
+        // --- 3. Import Abstimmungen ---
+        const abstimmungenSheet = workbook.getWorksheet('Abstimmungen');
+        if (abstimmungenSheet) {
+            console.log('Importing Abstimmungen...');
+            for (const row of abstimmungenSheet.getRows(2, abstimmungenSheet.rowCount - 1)) {
+                const title = row.getCell('B').value;
+                const classDateTime = row.getCell('C').value;
+                const status = row.getCell('D').value;
+
+                if (title) {
+                    const newPoll = await pollsDB.insertAsync({
+                        title,
+                        classDateTime,
+                        status,
+                        createdBy: adminUser._id,
+                        createdAt: new Date()
+                    });
+                    pollNameToIdMap.set(title, newPoll._id);
+                }
+            }
+            console.log(`Imported ${pollNameToIdMap.size} polls.`);
+        }
+
+
+        // --- 4. Import Rezepte ---
+        const rezepteSheet = workbook.getWorksheet('Rezepte');
+        if (rezepteSheet) {
+            console.log('Importing Rezepte...');
+            for (const row of rezepteSheet.getRows(2, rezepteSheet.rowCount - 1)) {
+                const recipeName = row.getCell('B').value;
+                const ingredients = row.getCell('C').value.split(',').map(i => i.trim());
+                const instructions = row.getCell('D').value;
+                const contextType = row.getCell('E').value;
+                const contextName = row.getCell('F').value;
+
+                if (recipeName) {
+                    const recipeData = { name: recipeName, ingredients, instructions };
+                    if (contextType === 'Gruppe') {
+                        recipeData.groupId = groupNameToIdMap.get(contextName);
+                    } else if (contextType === 'Abstimmung') {
+                        recipeData.pollId = pollNameToIdMap.get(contextName);
+                    }
+                    const newRecipe = await recipesDB.insertAsync(recipeData);
+                    recipeNameToIdMap.set(recipeName, newRecipe._id);
+                }
+            }
+            console.log(`Imported ${recipeNameToIdMap.size} recipes.`);
+        }
+
+
+        // --- 5. Import Stimmen ---
+        const stimmenSheet = workbook.getWorksheet('Stimmen');
+        let voteCount = 0;
+        if (stimmenSheet) {
+            console.log('Importing Stimmen...');
+             for (const row of stimmenSheet.getRows(2, stimmenSheet.rowCount - 1)) {
+                const recipeName = row.getCell('B').value;
+                const studentName = row.getCell('C').value;
+
+                if (recipeName && studentName) {
+                    const recipeId = recipeNameToIdMap.get(recipeName);
+                    const studentId = usernameToIdMap.get(studentName);
+                    if (recipeId && studentId) {
+                        await votesDB.insertAsync({ recipeId, studentId });
+                        voteCount++;
+                    }
+                }
+            }
+            console.log(`Imported ${voteCount} votes.`);
+        }
+
+
+        res.json({ message: 'Data imported successfully!' });
+
+    } catch (error) {
+        console.error('Import failed:', error);
+        res.status(500).json({ message: 'Failed to import data.', error: error.message });
+    }
+});
 
 // --- Server ---
 app.listen(port, () => {

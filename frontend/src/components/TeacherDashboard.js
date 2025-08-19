@@ -35,6 +35,11 @@ const TeacherDashboard = ({ user }) => {
     const [newPollDateTime, setNewPollDateTime] = useState(dayjs());
     const [openDemoDataDialog, setOpenDemoDataDialog] = useState(false);
 
+    // States for import
+    const [openImportDialog, setOpenImportDialog] = useState(false);
+    const [fileToImport, setFileToImport] = useState(null);
+    const fileInputRef = React.useRef(null);
+
 
     // --- Data Fetching ---
     const fetchStudents = async () => {
@@ -178,6 +183,52 @@ const TeacherDashboard = ({ user }) => {
         }
     };
 
+    const handleExport = () => {
+        // This will trigger the download of the file from the backend.
+        window.open('http://localhost:3000/api/export', '_blank');
+    };
+
+    const handleImportClick = () => {
+        // Trigger the hidden file input
+        fileInputRef.current.click();
+    };
+
+    const handleFileSelected = (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            setFileToImport(file);
+            setOpenImportDialog(true);
+        }
+        // Reset file input value so the same file can be selected again
+        event.target.value = null;
+    };
+
+    const handleConfirmImport = async () => {
+        setOpenImportDialog(false);
+        if (!fileToImport) return;
+
+        const formData = new FormData();
+        formData.append('file', fileToImport);
+
+        try {
+            await axios.post('/api/import', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+            alert('Data imported successfully!');
+            // Refresh all data
+            fetchStudents();
+            fetchPendingStudents();
+            fetchGroups();
+            fetchPolls();
+        } catch (error) {
+            alert(`Error: ${error.response?.data?.message || 'Could not import data.'}`);
+        } finally {
+            setFileToImport(null);
+        }
+    };
+
 
     // New states for recipes
     const [recipes, setRecipes] = useState([]); // For groups
@@ -277,13 +328,27 @@ const TeacherDashboard = ({ user }) => {
                 <Grid item xs={12}>
                     <Card>
                         <CardHeader title="Admin Actions" />
-                        <CardContent>
+                        <CardContent sx={{ display: 'flex', gap: 2 }}>
                             <Button
                                 variant="contained"
                                 color="warning"
                                 onClick={() => setOpenDemoDataDialog(true)}
                             >
                                 Load Demo Data
+                            </Button>
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                onClick={handleExport}
+                            >
+                                Daten Exportieren
+                            </Button>
+                            <Button
+                                variant="contained"
+                                color="secondary"
+                                onClick={handleImportClick}
+                            >
+                                Daten Importieren
                             </Button>
                         </CardContent>
                     </Card>
@@ -679,6 +744,34 @@ const TeacherDashboard = ({ user }) => {
                     <Button onClick={() => setOpenDemoDataDialog(false)}>Cancel</Button>
                     <Button onClick={handleLoadDemoData} color="warning" autoFocus>
                         Load Data
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Hidden File Input for Import */}
+            <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={handleFileSelected}
+                accept=".xlsx, .xls"
+            />
+
+            {/* Import Confirmation Dialog */}
+            <Dialog
+                open={openImportDialog}
+                onClose={() => setOpenImportDialog(false)}
+            >
+                <DialogTitle>{"Daten Importieren?"}</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Sind Sie sicher, dass Sie diese Datei importieren möchten? Alle vorhandenen Daten werden gelöscht und durch den Inhalt der Datei ersetzt. Diese Aktion kann nicht rückgängig gemacht werden.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setOpenImportDialog(false)}>Abbrechen</Button>
+                    <Button onClick={handleConfirmImport} color="warning" autoFocus>
+                        Importieren
                     </Button>
                 </DialogActions>
             </Dialog>
