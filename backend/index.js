@@ -15,6 +15,7 @@ const accountsDB = new Datastore({ filename: path.join(__dirname, 'data/accounts
 const groupsDB = new Datastore({ filename: path.join(__dirname, 'data/groups.db'), autoload: true });
 const recipesDB = new Datastore({ filename: path.join(__dirname, 'data/recipes.db'), autoload: true });
 const votesDB = new Datastore({ filename: path.join(__dirname, 'data/votes.db'), autoload: true });
+const pollsDB = new Datastore({ filename: path.join(__dirname, 'data/polls.db'), autoload: true });
 
 // --- Database Seeding ---
 const seedAdminUser = async () => {
@@ -176,6 +177,68 @@ app.get('/api/students/:id/groups', async (req, res) => {
     );
 
     res.json(groupsWithRecipes);
+});
+
+
+// --- Poll Management Routes ---
+
+// Create a new poll
+app.post('/api/polls', async (req, res) => {
+    const { title, classDateTime, createdBy } = req.body;
+    if (!title || !classDateTime || !createdBy) {
+        return res.status(400).json({ message: 'Title, class date/time, and creator ID are required.' });
+    }
+    const newPoll = {
+        title,
+        classDateTime,
+        createdBy, // userId of the teacher
+        status: 'open',
+        createdAt: new Date()
+    };
+    const createdPoll = await pollsDB.insertAsync(newPoll);
+    res.status(201).json(createdPoll);
+});
+
+// Get all polls
+app.get('/api/polls', async (req, res) => {
+    // Sort by class date descending
+    const polls = await pollsDB.findAsync({}).sort({ classDateTime: -1 });
+    res.json(polls);
+});
+
+// Create a new recipe for a poll
+app.post('/api/polls/:pollId/recipes', async (req, res) => {
+    const { name, ingredients, instructions } = req.body;
+    const { pollId } = req.params;
+
+    if (!name || !ingredients || !instructions) {
+        return res.status(400).json({ message: 'Name, ingredients, and instructions are required.' });
+    }
+
+    const newRecipe = {
+        name,
+        ingredients,
+        instructions,
+        pollId // Link recipe to the poll
+    };
+
+    const createdRecipe = await recipesDB.insertAsync(newRecipe);
+    res.status(201).json(createdRecipe);
+});
+
+// Get all recipes for a poll, with vote counts
+app.get('/api/polls/:pollId/recipes', async (req, res) => {
+    const { pollId } = req.params;
+    const recipes = await recipesDB.findAsync({ pollId });
+
+    const recipesWithVotes = await Promise.all(
+        recipes.map(async (recipe) => {
+            const votes = await votesDB.findAsync({ recipeId: recipe._id });
+            return { ...recipe, voteCount: votes.length };
+        })
+    );
+
+    res.json(recipesWithVotes);
 });
 
 // --- Group Management Routes ---

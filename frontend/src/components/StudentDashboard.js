@@ -2,23 +2,37 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Card, CardContent, Typography, Alert, List, ListItem, ListItemText, Divider, Button, Box, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import dayjs from 'dayjs';
 
 const StudentDashboard = ({ user }) => {
     const [balance, setBalance] = useState(0);
     const [groups, setGroups] = useState([]);
+    const [polls, setPolls] = useState([]);
     const [votedRecipeIds, setVotedRecipeIds] = useState([]);
 
     const fetchData = async () => {
         try {
-            // Fetch balance, groups (with recipes), and votes in parallel
-            const [balanceRes, groupsRes, votesRes] = await Promise.all([
+            // Fetch initial data
+            const [balanceRes, groupsRes, votesRes, pollsRes] = await Promise.all([
                 axios.get(`/api/students/${user._id}/balance`),
                 axios.get(`/api/students/${user._id}/groups`),
-                axios.get(`/api/students/${user._id}/votes`)
+                axios.get(`/api/students/${user._id}/votes`),
+                axios.get('/api/polls') // Get all polls
             ]);
+
             setBalance(balanceRes.data.balance);
             setGroups(groupsRes.data);
             setVotedRecipeIds(votesRes.data);
+
+            // For each poll, fetch its recipes
+            const pollsWithRecipes = await Promise.all(
+                pollsRes.data.map(async (poll) => {
+                    const recipesRes = await axios.get(`/api/polls/${poll._id}/recipes`);
+                    return { ...poll, recipes: recipesRes.data };
+                })
+            );
+            setPolls(pollsWithRecipes);
+
         } catch (error) {
             console.error("Failed to fetch dashboard data", error);
         }
@@ -64,6 +78,44 @@ const StudentDashboard = ({ user }) => {
                     </Typography>
                 </CardContent>
             </Card>
+
+            <Divider sx={{ my: 2 }} />
+
+            <Typography variant="h5" gutterBottom>
+                Cooking Class Polls
+            </Typography>
+            {polls.length > 0 ? polls.map(poll => (
+                <Accordion key={poll._id} sx={{ my: 1 }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography sx={{ flexShrink: 0, mr: 2 }}>{poll.title}</Typography>
+                        <Typography sx={{ color: 'text.secondary' }}>
+                            Class on: {dayjs(poll.classDateTime).format('MMMM D, YYYY h:mm A')}
+                        </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                        <List>
+                            {poll.recipes.map(recipe => (
+                                <ListItem
+                                    key={recipe._id}
+                                    secondaryAction={
+                                        <Button
+                                            size="small"
+                                            onClick={() => handleVote(recipe._id)}
+                                            disabled={votedRecipeIds.includes(recipe._id)}
+                                        >
+                                            Vote ({recipe.voteCount})
+                                        </Button>
+                                    }
+                                >
+                                    <ListItemText primary={recipe.name} />
+                                </ListItem>
+                            ))}
+                        </List>
+                    </AccordionDetails>
+                </Accordion>
+            )) : (
+                <Typography>There are no active polls right now.</Typography>
+            )}
 
             <Divider sx={{ my: 2 }} />
 
