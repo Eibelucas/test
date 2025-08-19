@@ -119,6 +119,57 @@ app.post('/api/admin/reject-student/:id', async (req, res) => {
   res.json({ message: 'Student rejected successfully.' });
 });
 
+// Load Demo Data
+app.post('/api/admin/load-demo-data', async (req, res) => {
+    try {
+        // Clear existing data - careful not to delete the admin user
+        await usersDB.removeAsync({ role: { $ne: 'teacher' } }, { multi: true });
+        await accountsDB.removeAsync({}, { multi: true });
+        await groupsDB.removeAsync({}, { multi: true });
+        await recipesDB.removeAsync({}, { multi: true });
+        await votesDB.removeAsync({}, { multi: true });
+        await pollsDB.removeAsync({}, { multi: true });
+
+        // Get admin user to associate with created items
+        const adminUser = await usersDB.findOneAsync({ role: 'teacher' });
+        if (!adminUser) {
+            return res.status(500).json({ message: 'Admin user not found. Cannot load demo data.' });
+        }
+
+        // --- Create Demo Students ---
+        const student1 = await usersDB.insertAsync({ username: 'Alice', password: 'password', role: 'student', status: 'active' });
+        const student2 = await usersDB.insertAsync({ username: 'Bob', password: 'password', role: 'student', status: 'active' });
+        const student3 = await usersDB.insertAsync({ username: 'Charlie', password: 'password', role: 'student', status: 'pending' });
+        await accountsDB.insertAsync({ userId: student1._id, balance: 100 });
+        await accountsDB.insertAsync({ userId: student2._id, balance: 50 });
+        await accountsDB.insertAsync({ userId: student3._id, balance: 0 });
+
+        // --- Create Demo Groups ---
+        const group1 = await groupsDB.insertAsync({ name: 'Pasta Lovers', studentIds: [student1._id, student2._id] });
+        const group2 = await groupsDB.insertAsync({ name: 'Baking Club', studentIds: [student2._id] });
+
+        // --- Create Demo Recipes for Groups ---
+        const recipe1 = await recipesDB.insertAsync({ name: 'Spaghetti Carbonara', ingredients: ['Pasta', 'Eggs', 'Pancetta', 'Parmesan Cheese'], instructions: 'A classic Roman pasta dish.', groupId: group1._id });
+        await recipesDB.insertAsync({ name: 'Chocolate Chip Cookies', ingredients: ['Flour', 'Sugar', 'Butter', 'Chocolate Chips'], instructions: 'A classic cookie.', groupId: group2._id });
+
+        // --- Create Demo Polls ---
+        const poll1 = await pollsDB.insertAsync({ title: 'Next Week\'s Class Theme', classDateTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), createdBy: adminUser._id, status: 'open', createdAt: new Date() });
+
+        // --- Create Demo Recipes for Polls ---
+        const recipe3 = await recipesDB.insertAsync({ name: 'Tacos al Pastor', ingredients: ['Pork', 'Pineapple', 'Onion', 'Cilantro'], instructions: 'A popular taco style from Central Mexico.', pollId: poll1._id });
+        await recipesDB.insertAsync({ name: 'Margherita Pizza', ingredients: ['Dough', 'San Marzano Tomatoes', 'Mozzarella', 'Basil'], instructions: 'A classic Neapolitan pizza.', pollId: poll1._id });
+
+        // --- Create Demo Votes ---
+        await votesDB.insertAsync({ recipeId: recipe1._id, studentId: student1._id });
+        await votesDB.insertAsync({ recipeId: recipe1._id, studentId: student2._id });
+        await votesDB.insertAsync({ recipeId: recipe3._id, studentId: student1._id });
+
+        res.json({ message: 'Demo data loaded successfully.' });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to load demo data.', error: error.message });
+    }
+});
+
 // --- Student and Account Routes ---
 
 // Get all active students
