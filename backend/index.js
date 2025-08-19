@@ -633,7 +633,10 @@ app.post('/api/import', upload.single('file'), async (req, res) => {
             console.log('Importing Gruppen...');
             for (const row of gruppenSheet.getRows(2, gruppenSheet.rowCount - 1)) {
                 const groupName = row.getCell('B').value;
-                const memberUsernames = row.getCell('C').value.split(',').map(name => name.trim());
+                const memberUsernamesRaw = row.getCell('C').value;
+                const memberUsernames = (typeof memberUsernamesRaw === 'string' && memberUsernamesRaw)
+                    ? memberUsernamesRaw.split(',').map(name => name.trim())
+                    : [];
 
                 if (groupName) {
                     const studentIds = memberUsernames.map(name => usernameToIdMap.get(name)).filter(id => id);
@@ -677,7 +680,10 @@ app.post('/api/import', upload.single('file'), async (req, res) => {
             console.log('Importing Rezepte...');
             for (const row of rezepteSheet.getRows(2, rezepteSheet.rowCount - 1)) {
                 const recipeName = row.getCell('B').value;
-                const ingredients = row.getCell('C').value.split(',').map(i => i.trim());
+                const ingredientsRaw = row.getCell('C').value;
+                const ingredients = (typeof ingredientsRaw === 'string' && ingredientsRaw)
+                    ? ingredientsRaw.split(',').map(i => i.trim())
+                    : [];
                 const instructions = row.getCell('D').value;
                 const contextType = row.getCell('E').value;
                 const contextName = row.getCell('F').value;
