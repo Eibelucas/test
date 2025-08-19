@@ -133,10 +133,6 @@ const TeacherDashboard = () => {
     const [newRecipe, setNewRecipe] = useState({ name: '', ingredients: '', instructions: '' });
     const [viewRecipe, setViewRecipe] = useState(null); // The recipe to view
 
-    // --- Data Fetching ---
-    const fetchStudents = async () => { /* ... */ };
-    const fetchPendingStudents = async () => { /* ... */ };
-    const fetchGroups = async () => { /* ... */ };
     const fetchRecipes = async (groupId) => {
         if (!groupId) {
             setRecipes([]);
@@ -151,12 +147,6 @@ const TeacherDashboard = () => {
     };
 
     useEffect(() => {
-        fetchStudents();
-        fetchPendingStudents();
-        fetchGroups();
-    }, []);
-
-    useEffect(() => {
         if (selectedGroup) {
             setSelectedGroupStudentIds(selectedGroup.studentIds || []);
             fetchRecipes(selectedGroup._id);
@@ -166,12 +156,6 @@ const TeacherDashboard = () => {
     }, [selectedGroup]);
 
 
-    // --- Handlers ---
-    const handleTransaction = async (type) => { /* ... */ };
-    const handleApproval = async (studentId, action) => { /* ... */ };
-    const handleCreateGroup = async () => { /* ... */ };
-    const handleUpdateGroupStudents = async () => { /* ... */ };
-    const handleGroupCharge = async () => { /* ... */ };
 
     const handleCreateRecipe = async () => {
         if (!selectedGroup || !newRecipe.name || !newRecipe.ingredients) return;
